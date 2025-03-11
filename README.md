@@ -10,7 +10,7 @@ cursor做的合同生成小工具  contractG发行版公布了！
 发行版下载链接 https://codeload.github.com/vocoip/Release-contractG/zip/refs/heads/main  
 
 contractG 使用截图，示例数据由LLM生成：  
-![20250311181846](https://github.com/user-attachments/assets/d22bcd84-71cc-4a3b-aceb-e5d3e288c604){:width="70%"}
+![20250311181846](https://github.com/user-attachments/assets/d22bcd84-71cc-4a3b-aceb-e5d3e288c604)
 ![SC-20250311-001209_with_seal_00](https://github.com/user-attachments/assets/d1d2dbd2-2249-4083-bec0-92c375d1fb22)
 ![报价单-SC-20250311-001209_with_seal_00](https://github.com/user-attachments/assets/201d477b-e6bd-4ab3-87b4-6ad492b526a0)
 

@@ -1,20 +1,20 @@
 cursor做的合同生成小工具  contractG发行版公布了！
 这个小工具我是做了自己用的，大概做了两天就可以自己用了。
 
-完善功能和做发行版花了近一周的时间。
-我自己感觉很好用，分享给有需要的企业朋友。
+完善功能和做发行版花了近一周的时间。  
+我自己感觉很好用，分享给有需要的企业朋友。  
 
-发行版免费，欢迎大家测试和使用，并推荐给周围有需要朋友。
-会选择合适机会开源（没人用开源毫无意义，所以暂时不开源，这段时间有修改需求的可以联系我要源码，不收费）
+发行版免费，欢迎大家测试和使用，并推荐给周围有需要朋友。  
+会选择合适机会开源（没人用开源毫无意义，所以暂时不开源，这段时间有修改需求的可以联系我要源码，不收费）  
 
-发行版下载链接 https://codeload.github.com/vocoip/Release-contractG/zip/refs/heads/main
+发行版下载链接 https://codeload.github.com/vocoip/Release-contractG/zip/refs/heads/main  
 
-contractG 使用截图，示例数据由LLM生成：
+contractG 使用截图，示例数据由LLM生成：  
 ![20250311181846](https://github.com/user-attachments/assets/d22bcd84-71cc-4a3b-aceb-e5d3e288c604)
 ![SC-20250311-001209_with_seal_00](https://github.com/user-attachments/assets/d1d2dbd2-2249-4083-bec0-92c375d1fb22)
 ![报价单-SC-20250311-001209_with_seal_00](https://github.com/user-attachments/assets/201d477b-e6bd-4ab3-87b4-6ad492b526a0)
 
-# 合同生成工具 (contractG)
+# 合同生成工具 (contractG)  
 
 一个用于生成合同和报价单的桌面应用程序，使用Python和PyQt5开发。
 

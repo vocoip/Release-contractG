@@ -5,7 +5,7 @@ cursor做的合同生成小工具  contractG发行版公布了！
 我自己感觉很好用，分享给有需要的企业朋友。
 
 发行版免费，欢迎大家测试和使用，并推荐给周围有需要朋友。
-会选择合适机会开源！
+会选择合适机会开源（没人用开源毫无意义，所以暂时不开源，这段时间有修改需求的可以联系我要源码，不收费）
 
 发行版下载链接 https://codeload.github.com/vocoip/Release-contractG/zip/refs/heads/main
 

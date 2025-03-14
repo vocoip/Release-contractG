@@ -1,6 +1,6 @@
 # 合同生成工具 (contractG)
 
-![合同生成界面](https://github.com/user-attachments/assets/d22bcd84-71cc-4a3b-aceb-e5d3e288c604)
+![新版界面](https://github.com/user-attachments/assets/0e2f1a21-181e-46bf-9e40-b8937e33387e)
 
 ## 📢 最新发布 - R1.1 (2025年3月14日)
 
@@ -9,8 +9,9 @@
 - **界面优化**：更简洁直观的用户界面
 - **Bug修复**：修复多个已知问题
 
-![新版界面](https://github.com/user-attachments/assets/0e2f1a21-181e-46bf-9e40-b8937e33387e)
 ![微信图片](https://github.com/user-attachments/assets/e6dee3d5-e840-4db0-990d-0ba4ee5fa4d4)
+![合同示例](https://github.com/user-attachments/assets/d1d2dbd2-2249-4083-bec0-92c375d1fb22)
+![报价单示例](https://github.com/user-attachments/assets/201d477b-e6bd-4ab3-87b4-6ad492b526a0)
 
 **下载地址**：[https://codeload.github.com/vocoip/Release-contractG/zip/refs/heads/main](https://codeload.github.com/vocoip/Release-contractG/zip/refs/heads/main)
 
@@ -20,10 +21,6 @@ contractG是一款专为企业设计的合同生成工具，使用Python和PyQt5
 
 本工具最初是为个人使用而开发，经过完善后决定免费分享给有需要的企业用户。欢迎测试使用并推荐给周围有需要的朋友。
 
-## 🖼️ 功能展示
-
-![合同示例](https://github.com/user-attachments/assets/d1d2dbd2-2249-4083-bec0-92c375d1fb22)
-![报价单示例](https://github.com/user-attachments/assets/201d477b-e6bd-4ab3-87b4-6ad492b526a0)
 
 ## 🚀 快速开始
 

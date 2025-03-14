@@ -3,6 +3,9 @@
 - 增加拖曳excel转PDF功能
 - 其它bug修正
 
+- ![微信图片_20250314164450](https://github.com/user-attachments/assets/e6dee3d5-e840-4db0-990d-0ba4ee5fa4d4)
+
+
 
 cursor做的合同生成小工具  contractG发行版公布了！
 这个小工具我是做了自己用的，大概做了两天就可以自己用了。

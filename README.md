@@ -1,10 +1,7 @@
-### contractG R1.1发布
-### PDF尺寸12M变200K
-### 增加拖曳excel转PDF功能
-### 其它bug修正
-
-
-
+### 2025年3月14日 contractG R1.1发布  
+- PDF尺寸12M变200K
+- 增加拖曳excel转PDF功能
+- 其它bug修正
 
 
 cursor做的合同生成小工具  contractG发行版公布了！

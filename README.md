@@ -7,6 +7,10 @@
 
 - ![微信图片_20250314164450](https://github.com/user-attachments/assets/e6dee3d5-e840-4db0-990d-0ba4ee5fa4d4)
 
+- 更简洁的界面
+- ![微信图片_20250314170938](https://github.com/user-attachments/assets/0e2f1a21-181e-46bf-9e40-b8937e33387e)
+
+
 
 
 cursor做的合同生成小工具  contractG发行版公布了！

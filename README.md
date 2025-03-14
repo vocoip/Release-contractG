@@ -1,7 +1,7 @@
-R1.1发布
-PDF尺寸12M变200K
-增加拖曳excel转PDF功能
-其它bug修正
+### contractG R1.1发布
+### PDF尺寸12M变200K
+### 增加拖曳excel转PDF功能
+### 其它bug修正
 
 
 

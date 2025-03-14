@@ -3,6 +3,8 @@
 - 增加拖曳excel转PDF功能
 - 其它bug修正
 
+- 下载地址 https://codeload.github.com/vocoip/Release-contractG/zip/refs/heads/main
+
 - ![微信图片_20250314164450](https://github.com/user-attachments/assets/e6dee3d5-e840-4db0-990d-0ba4ee5fa4d4)
 
 

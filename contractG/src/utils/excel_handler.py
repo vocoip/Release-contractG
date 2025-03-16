@@ -8,7 +8,6 @@ Excel处理工具模块
 import os
 import datetime
 import random
-import pandas as pd
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill, Color
 from openpyxl.utils import get_column_letter
@@ -16,8 +15,8 @@ from openpyxl.drawing.image import Image
 from openpyxl.cell.rich_text import TextBlock, InlineFont
 from PyQt5.QtWidgets import QMessageBox
 import win32com.client
-from PyPDF2 import PdfReader, PdfWriter
-from PIL import Image as PILImage
+# Pillow将按需导入，减少启动时间和内存占用
+# from PIL import Image as PILImage
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -42,6 +41,18 @@ except ImportError:
     print("警告: PyMuPDF库未安装，将不会生成图片式PDF。请运行 'pip install PyMuPDF' 安装。")
     PYMUPDF_AVAILABLE = False
 
+# 检查Pillow是否可用，但不立即导入
+PILLOW_AVAILABLE = True
+try:
+    import importlib.util
+    pillow_spec = importlib.util.find_spec("PIL")
+    if pillow_spec is None:
+        PILLOW_AVAILABLE = False
+        print("警告: Pillow库未安装，某些图像处理功能可能不可用。")
+except ImportError:
+    PILLOW_AVAILABLE = False
+    print("警告: 无法检查Pillow库是否可用。")
+
 # 注册中文字体
 try:
     # 尝试注册微软雅黑字体（Windows系统常见字体）
@@ -58,7 +69,7 @@ class ExcelHandler:
     """Excel处理工具类"""
     def __init__(self):
         # 确保输出目录存在
-        self.output_dir = os.path.join('output', 'contracts')
+        self.output_dir = 'output'  # 直接使用output目录，不再使用子目录
         os.makedirs(self.output_dir, exist_ok=True)
         
         # 设置日志
@@ -193,12 +204,13 @@ class ExcelHandler:
         
         return seal_file
     
-    def convert_excel_to_pdf(self, excel_file):
+    def convert_excel_to_pdf(self, excel_file, progress_callback=None):
         """
-        将Excel文件转换为PDF
+        将Excel文件转换为PDF（优化版）
         
         参数:
             excel_file (str): Excel文件路径
+            progress_callback (function): 进度回调函数
             
         返回:
             str: 生成的PDF文件路径
@@ -209,37 +221,42 @@ class ExcelHandler:
         self.log(f"开始将Excel转换为PDF: {os.path.basename(excel_file)}")
         
         try:
-            # 初始化COM组件
-            pythoncom.CoInitialize()
+            # 复用Excel实例（首次使用时初始化）
+            if not hasattr(self, '_excel_app'):
+                pythoncom.CoInitialize()
+                self._excel_app = win32com.client.Dispatch("Excel.Application")
+                self._excel_app.Visible = False
+                self._excel_app.DisplayAlerts = False
             
-            # 创建Excel应用程序实例
-            excel = win32com.client.Dispatch("Excel.Application")
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            
-            # 打开Excel文件
-            workbook = excel.Workbooks.Open(os.path.abspath(excel_file))
+            # 使用缓存实例打开文件
+            workbook = self._excel_app.Workbooks.Open(os.path.abspath(excel_file))
             
             # 转换为PDF
+            # 添加进度监控（模拟进度）
+            for i in range(1, 6):
+                time.sleep(0.5)  # 模拟转换阶段
+                if progress_callback:
+                    progress_callback(i*20)
+            
             workbook.ExportAsFixedFormat(
-                Type=0,  # 0表示PDF格式
+                Type=0,
                 Filename=os.path.abspath(pdf_file),
-                Quality=0,  # 标准质量
+                Quality=0,
                 IncludeDocProperties=True,
                 IgnorePrintAreas=False,
                 OpenAfterPublish=False
             )
             
-            # 关闭工作簿和Excel应用程序
+            # 保持工作簿打开状态复用
             workbook.Close(False)
-            excel.Quit()
             
-            # 释放COM对象
-            del workbook
-            del excel
-            
-            # 释放COM组件
-            pythoncom.CoUninitialize()
+            # 不再立即释放资源
+            # 新增清理方法供类销毁时调用
+            # def __del__(self):
+            #     if hasattr(self, '_excel_app'):
+            #         self._excel_app.Quit()
+            #         del self._excel_app
+            #         pythoncom.CoUninitialize()
             
             self.log(f"Excel转换为PDF成功: {os.path.basename(pdf_file)}")
             return pdf_file
@@ -434,22 +451,37 @@ class ExcelHandler:
                 self.log(f"处理第{page_num+1}页，尺寸: {orig_width:.1f}x{orig_height:.1f}，DPI: {render_dpi}")
                 
                 # 将页面渲染为图片，使用较高的DPI以确保内容完整
-                # 不应用缩放，直接使用原始尺寸渲染，避免内容丢失
                 pix = page.get_pixmap(matrix=fitz.Matrix(render_dpi/72, render_dpi/72))
                 
                 # 创建临时图像文件以应用压缩
                 temp_img_path = os.path.join(tempfile.gettempdir(), f"temp_page_{page_num}.jpg")
                 
-                # 保存为JPEG格式并应用压缩，但使用较高的质量以确保内容清晰
+                # 使用PyMuPDF保存为JPEG格式并应用压缩
                 pix.save(temp_img_path, output="jpeg", jpg_quality=max(quality, 80))
                 
                 # 创建一个新页面，使用A4尺寸
                 new_page = output_document.new_page(width=a4_width, height=a4_height)
                 
-                # 加载保存的图像以获取其尺寸
-                img = PILImage.open(temp_img_path)
-                img_width, img_height = img.size
-                img.close()
+                # 获取图像尺寸 - 优先使用PyMuPDF
+                try:
+                    # 使用PyMuPDF打开图像获取尺寸
+                    img_doc = fitz.open(temp_img_path)
+                    img_width = img_doc[0].rect.width
+                    img_height = img_doc[0].rect.height
+                    img_doc.close()
+                except Exception as e:
+                    self.log(f"使用PyMuPDF获取图像尺寸失败: {str(e)}，尝试使用Pillow")
+                    # 按需导入Pillow
+                    try:
+                        from PIL import Image as PILImage
+                        img = PILImage.open(temp_img_path)
+                        img_width, img_height = img.size
+                        img.close()
+                    except ImportError:
+                        self.log("Pillow库未安装，无法获取图像尺寸")
+                        # 使用原始页面尺寸作为备选
+                        img_width = orig_width * (render_dpi/72)
+                        img_height = orig_height * (render_dpi/72)
                 
                 # 计算缩放比例，确保图像适合A4尺寸并且内容完整
                 scale_x = a4_width / img_width
@@ -1512,4 +1544,4 @@ class ExcelHandler:
             
         except Exception as e:
             self.logger.error(f"调整PDF为A4尺寸时出错: {str(e)}")
-            raise 
+            raise

@@ -7,7 +7,9 @@
 
 import os
 import sys
-import pandas as pd
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Font, Alignment
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
     QTableWidget, QTableWidgetItem, QLineEdit, 
@@ -18,8 +20,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QIcon, QFont
 
-# 添加项目根目录到Python路径
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+# 注意：路径设置已由path_setup模块处理，不需要在这里重复设置
 
 from src.database.excel_manager import ExcelManager
 from src.models.product import Product
@@ -454,25 +455,24 @@ class ProductTab(QWidget):
         return self.products
     
     def import_products(self):
-        """导入商品"""
+        """导入商品数据"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择要导入的Excel文件",
+            os.getcwd(),
+            "Excel Files (*.xlsx)"
+        )
+        
+        if not file_path:
+            return
+        
+        # 读取Excel文件
         try:
-            # 选择要导入的文件
-            file_path, _ = QFileDialog.getOpenFileName(
-                self,
-                "选择要导入的Excel文件",
-                os.getcwd(),
-                "Excel Files (*.xlsx)"
-            )
+            wb = load_workbook(file_path)
+            ws = wb.active
             
-            if not file_path:
-                return
-            
-            # 读取Excel文件
-            try:
-                df = pd.read_excel(file_path)
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"无法读取Excel文件：{str(e)}\n请确保文件格式正确且未被其他程序占用。")
-                return
+            # 获取表头
+            headers = [cell.value for cell in ws[1]]
             
             # 列名映射
             column_mapping = {
@@ -484,13 +484,15 @@ class ProductTab(QWidget):
             
             # 检查必要的列是否存在
             required_columns = list(column_mapping.keys())
-            missing_columns = [col for col in required_columns if col not in df.columns]
+            missing_columns = [col for col in required_columns if col not in headers]
             
             if missing_columns:
                 # 创建模板文件
                 template_path = os.path.join(os.path.dirname(file_path), "商品导入模板.xlsx")
-                template_df = pd.DataFrame(columns=required_columns)
-                template_df.to_excel(template_path, index=False)
+                template_wb = Workbook()
+                template_ws = template_wb.active
+                template_ws.append(required_columns)
+                template_wb.save(template_path)
                 
                 QMessageBox.warning(
                     self,
@@ -501,69 +503,34 @@ class ProductTab(QWidget):
                 )
                 return
             
-            # 重命名列
-            df = df.rename(columns=column_mapping)
-            
-            # 数据验证结果
-            validation_errors = []
-            new_products = []
+            # 创建列名到索引的映射
+            header_map = {header: idx for idx, header in enumerate(headers, 1)}
             
             # 导入商品数据
-            for index, row in df.iterrows():
+            new_products = []
+            validation_errors = []
+            
+            # 从第二行开始读取数据
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
                 try:
-                    # 验证必填字段
-                    name = str(row['name']).strip()
-                    model = str(row['model']).strip()
-                    unit = str(row['unit']).strip()
+                    # 获取数据
+                    name = str(row[header_map['商品名称'] - 1] or '').strip()
+                    model = str(row[header_map['规格型号'] - 1] or '').strip()
+                    unit = str(row[header_map['单位'] - 1] or '').strip()
+                    price = str(row[header_map['单价(元)'] - 1] or '0.00').strip()
                     
+                    # 验证数据
                     if not name:
-                        validation_errors.append(f"第 {index + 2} 行：商品名称不能为空")
+                        validation_errors.append(f"第 {row_idx} 行：商品名称不能为空")
                         continue
                     
-                    if not model:
-                        validation_errors.append(f"第 {index + 2} 行：规格型号不能为空")
-                        continue
-                    
-                    if not unit:
-                        validation_errors.append(f"第 {index + 2} 行：单位不能为空")
-                        continue
-                    
-                    # 验证字段长度
-                    if len(name) > 100:
-                        validation_errors.append(f"第 {index + 2} 行：商品名称不能超过100个字符")
-                        continue
-                    
-                    if len(model) > 50:
-                        validation_errors.append(f"第 {index + 2} 行：规格型号不能超过50个字符")
-                        continue
-                    
-                    if len(unit) > 10:
-                        validation_errors.append(f"第 {index + 2} 行：单位不能超过10个字符")
-                        continue
-                    
-                    # 处理价格
                     try:
-                        price = float(str(row['price']).replace(',', ''))
-                        if price <= 0:
-                            validation_errors.append(f"第 {index + 2} 行：单价必须大于0")
+                        price_float = float(price)
+                        if price_float < 0:
+                            validation_errors.append(f"第 {row_idx} 行：单价不能为负数")
                             continue
-                        if price > 9999999.99:
-                            validation_errors.append(f"第 {index + 2} 行：单价不能超过9999999.99")
-                            continue
-                        price_str = f"{price:.2f}"
-                    except (ValueError, TypeError):
-                        validation_errors.append(f"第 {index + 2} 行：单价格式不正确")
-                        continue
-                    
-                    # 检查重复商品
-                    is_duplicate = False
-                    for existing_product in self.products:
-                        if existing_product.name == name and existing_product.model == model:
-                            validation_errors.append(f"第 {index + 2} 行：商品 '{name} ({model})' 已存在")
-                            is_duplicate = True
-                            break
-                    
-                    if is_duplicate:
+                    except ValueError:
+                        validation_errors.append(f"第 {row_idx} 行：单价必须是数字")
                         continue
                     
                     # 创建商品对象
@@ -571,119 +538,88 @@ class ProductTab(QWidget):
                         name=name,
                         model=model,
                         unit=unit,
-                        price=price_str
+                        price=price
                     )
                     new_products.append(product)
                 
                 except Exception as e:
-                    validation_errors.append(f"第 {index + 2} 行：数据格式错误 - {str(e)}")
+                    validation_errors.append(f"第 {row_idx} 行：数据格式错误 - {str(e)}")
             
-            # 显示验证错误
+            # 如果有验证错误
             if validation_errors:
-                error_msg = "导入过程中发现以下问题：\n\n" + "\n".join(validation_errors)
-                if new_products:
-                    error_msg += f"\n\n仍然可以导入 {len(new_products)} 个有效商品，是否继续？"
-                    reply = QMessageBox.question(
-                        self,
-                        "导入警告",
-                        error_msg,
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No
-                    )
-                    if reply != QMessageBox.Yes:
-                        return
-                else:
-                    QMessageBox.critical(self, "导入失败", error_msg)
-                    return
+                error_msg = "\n".join(validation_errors)
+                QMessageBox.warning(self, "导入警告", f"部分数据导入失败：\n{error_msg}")
             
-            if not new_products:
-                QMessageBox.warning(self, "警告", "没有可导入的商品数据！")
-                return
-            
-            # 合并现有商品和新导入的商品
-            self.products.extend(new_products)
-            
-            # 保存到Excel
-            if self.excel_manager.save_products(self.products):
-                self.update_table()
-                self.product_updated.emit()
+            # 添加有效的商品数据
+            if new_products:
+                self.products.extend(new_products)
+                self.save_products()
+                self.load_products()
                 QMessageBox.information(
-                    self,
-                    "成功",
-                    f"成功导入 {len(new_products)} 个商品！"
+                    self, 
+                    "导入成功", 
+                    f"成功导入 {len(new_products)} 个商品"
                 )
-            else:
-                QMessageBox.critical(self, "错误", "保存商品数据失败！")
         
         except Exception as e:
             QMessageBox.critical(self, "错误", f"导入商品数据失败：{str(e)}")
-    
+
     def export_products(self):
-        """导出商品"""
+        """导出商品数据"""
+        if not self.products:
+            QMessageBox.warning(self, "警告", "没有商品数据可导出")
+            return
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存商品数据",
+            os.path.join(os.getcwd(), "商品数据.xlsx"),
+            "Excel Files (*.xlsx)"
+        )
+        
+        if not file_path:
+            return
+        
         try:
-            if not self.products:
-                QMessageBox.warning(self, "警告", "没有可导出的商品数据！")
-                return
+            # 创建工作簿
+            wb = Workbook()
+            ws = wb.active
+            ws.title = '商品数据'
             
-            # 选择保存路径
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "保存商品数据",
-                os.path.join(os.getcwd(), "商品数据.xlsx"),
-                "Excel Files (*.xlsx)"
+            # 添加表头
+            headers = ['商品名称', '规格型号', '单位', '单价(元)']
+            ws.append(headers)
+            
+            # 设置表头样式
+            header_font = Font(bold=True)
+            for cell in ws[1]:
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center')
+            
+            # 添加数据
+            for product in self.products:
+                row = [
+                    product.name,
+                    product.model,
+                    product.unit,
+                    float(product.price)
+                ]
+                ws.append(row)
+            
+            # 调整列宽
+            ws.column_dimensions['A'].width = 40  # 商品名称
+            ws.column_dimensions['B'].width = 30  # 规格型号
+            ws.column_dimensions['C'].width = 15  # 单位
+            ws.column_dimensions['D'].width = 15  # 单价
+            
+            # 保存文件
+            wb.save(file_path)
+            
+            QMessageBox.information(
+                self, 
+                "导出成功", 
+                f"成功导出 {len(self.products)} 个商品到：\n{file_path}"
             )
-            
-            if not file_path:
-                return
-            
-            try:
-                # 转换数据为DataFrame
-                data = []
-                for product in self.products:
-                    data.append({
-                        '商品名称': product.name,
-                        '规格型号': product.model,
-                        '单位': product.unit,
-                        '单价(元)': float(product.price)
-                    })
-                
-                df = pd.DataFrame(data)
-                
-                # 设置列的顺序
-                df = df[['商品名称', '规格型号', '单位', '单价(元)']]
-                
-                # 设置Excel写入器
-                writer = pd.ExcelWriter(file_path, engine='openpyxl')
-                
-                # 写入数据
-                df.to_excel(writer, index=False, sheet_name='商品数据')
-                
-                # 获取工作表
-                worksheet = writer.sheets['商品数据']
-                
-                # 调整列宽
-                worksheet.column_dimensions['A'].width = 40  # 商品名称
-                worksheet.column_dimensions['B'].width = 30  # 规格型号
-                worksheet.column_dimensions['C'].width = 15  # 单位
-                worksheet.column_dimensions['D'].width = 15  # 单价
-                
-                # 保存文件
-                writer.close()
-                
-                QMessageBox.information(
-                    self,
-                    "成功",
-                    f"已成功导出 {len(self.products)} 个商品到：\n{file_path}"
-                )
-            
-            except PermissionError:
-                QMessageBox.critical(
-                    self,
-                    "错误",
-                    "无法保存文件！\n请确保：\n1. 文件未被其他程序占用\n2. 您有写入权限\n3. 文件没有被设置为只读"
-                )
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"保存文件时出错：{str(e)}")
         
         except Exception as e:
             QMessageBox.critical(self, "错误", f"导出商品数据失败：{str(e)}") 

@@ -11,6 +11,19 @@ import sys
 import importlib.util
 import traceback
 
+# 添加当前目录到Python路径，以便能够导入path_setup模块
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# 添加项目根目录到Python路径
+project_root = os.path.dirname(current_dir)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# 现在使用绝对导入
+from src.utils.path_setup import setup_python_path
+
 def main():
     """主函数"""
     try:
@@ -19,35 +32,6 @@ def main():
         
         # 获取项目根目录（src的父目录）
         project_root = os.path.dirname(current_dir)
-        
-        # 将项目根目录添加到Python路径
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        
-        # 将src目录添加到Python路径
-        if current_dir not in sys.path:
-            sys.path.insert(0, current_dir)
-        
-        # 添加ui目录到Python路径
-        ui_dir = os.path.join(current_dir, 'ui')
-        if os.path.exists(ui_dir) and ui_dir not in sys.path:
-            sys.path.insert(0, ui_dir)
-        
-        # 为打包后的环境添加特殊处理
-        if hasattr(sys, '_MEIPASS'):
-            # 将 PyInstaller 的临时目录添加到路径
-            if sys._MEIPASS not in sys.path:
-                sys.path.insert(0, sys._MEIPASS)
-            
-            # 添加src目录到Python路径
-            src_path = os.path.join(sys._MEIPASS, 'src')
-            if os.path.exists(src_path) and src_path not in sys.path:
-                sys.path.insert(0, src_path)
-            
-            # 添加ui目录到Python路径
-            ui_path = os.path.join(sys._MEIPASS, 'src', 'ui')
-            if os.path.exists(ui_path) and ui_path not in sys.path:
-                sys.path.insert(0, ui_path)
         
         # 打印路径信息，帮助调试
         print("Python路径:")

@@ -1,15 +1,15 @@
 import os
 import sys
+import threading
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, 
     QProgressBar, QHBoxLayout, QFrame, QGroupBox, QSplitter, 
     QSpacerItem, QSizePolicy, QApplication, QCheckBox
 )
-from PyQt5.QtCore import Qt, QMimeData, QTimer
+from PyQt5.QtCore import Qt, QMimeData, QTimer, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QFont, QPixmap
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-import pandas as pd
 from src.utils.excel_to_pdf import ExcelToPdfConverter
 from src.ui.styles import CARD_STYLE, PRIMARY_COLOR, SECONDARY_COLOR, SUCCESS_COLOR
 
@@ -17,8 +17,9 @@ class OptionTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setup_ui()
-        self.converter = ExcelToPdfConverter()  # Initialize the converter
+        self.converter = ExcelToPdfConverter()
         self.output_pdf_path = None
+        self.conversion_thread = None
         
         # 启用拖放功能
         self.setAcceptDrops(True)
@@ -53,7 +54,7 @@ class OptionTab(QWidget):
         # 简化的使用说明
         instruction_text = QLabel(
             "将Excel文件直接拖放到下方虚线框内即可自动转换为PDF。\n"
-            "转换后的PDF文件将保存在与Excel文件相同的目录下，文件名为\"原文件名_converted.pdf\"。\n"
+            "转换后的PDF文件将保存在output目录下，文件名为原文件名。\n"
             "勾选\"图片式PDF\"选项可将PDF转换为图片格式，提高兼容性。"
         )
         instruction_text.setWordWrap(True)
@@ -227,90 +228,117 @@ class OptionTab(QWidget):
         
         self.setLayout(main_layout)
 
-    def convert_to_pdf(self):
-        if hasattr(self, 'selected_file'):
-            self.output_pdf_path = self.selected_file.replace('.xlsx', '_converted.pdf')
-            
-            # 更新UI状态 - 显示正在转换
-            self.status_label.setText("正在转换，请稍候...")
-            self.progress_bar.setVisible(True)
-            self.progress_bar.setRange(0, 0)  # Indeterminate state
-            
-            # 更改文件区域样式，表示正在转换
-            self.file_info_frame.setStyleSheet("""
-                background-color: #e8f5e9;
-                border: 1px dashed #4caf50;
-                border-radius: 5px;
-                padding: 10px;
-            """)
-            
-            # 让UI有时间更新
-            QApplication.processEvents()
-            
+    # 添加转换线程类
+    class ConversionThread(QThread):
+        progress_updated = pyqtSignal(int)
+        conversion_finished = pyqtSignal(str)
+        conversion_failed = pyqtSignal(str)
+
+        def __init__(self, converter, file_path, output_path):
+            super().__init__()
+            self.converter = converter
+            self.file_path = file_path
+            self.output_path = output_path
+
+        def run(self):
             try:
-                # 转换为PDF
-                self.converter.convert_to_pdf(self.selected_file, self.output_pdf_path)
-                
-                # 如果勾选了图片式PDF选项，则将PDF转换为图片式PDF
-                if self.image_pdf_checkbox.isChecked():
-                    self.status_label.setText("正在转换为图片式PDF...")
-                    QApplication.processEvents()
-                    
-                    # 创建临时文件路径
-                    temp_pdf = self.output_pdf_path
-                    final_pdf = self.output_pdf_path.replace('.pdf', '_image.pdf')
-                    
-                    # 转换为图片式PDF
-                    self.converter.convert_pdf_to_image_pdf(temp_pdf, final_pdf)
-                    
-                    # 更新输出路径
-                    self.output_pdf_path = final_pdf
-                
-                # 更新UI状态 - 显示转换成功
-                self.status_label.setText(f"转换成功: {os.path.basename(self.output_pdf_path)}")
-                self.open_pdf_button.setEnabled(True)
-                self.open_pdf_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #28a745;
-                        color: white;
-                        border: none;
-                        border-radius: 5px;
-                        padding: 8px 16px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: #218838;
-                    }
-                """)
-                
-                # 更改文件区域样式，表示转换成功
-                self.file_info_frame.setStyleSheet("""
-                    background-color: #e8f5e9;
-                    border: 1px solid #4caf50;
-                    border-radius: 5px;
-                    padding: 10px;
-                """)
-                
+                # 带进度回调的转换
+                def progress_callback(value):
+                    self.progress_updated.emit(value)
+
+                self.converter.convert_to_pdf(
+                    excel_file=self.file_path, 
+                    pdf_file=self.output_path,
+                    progress_callback=progress_callback
+                )
+                self.conversion_finished.emit(self.output_path)
             except Exception as e:
-                # 更新UI状态 - 显示转换失败
-                self.status_label.setText(f"转换失败: {str(e)}")
-                self.output_pdf_path = None
+                self.conversion_failed.emit(str(e))
+
+    def handle_progress_update(self, value):
+        """处理进度更新"""
+        self.progress_bar.setValue(value)
+        QApplication.processEvents()
+
+    def handle_conversion_finished(self, output_path):
+        """处理转换完成"""
+        self.output_pdf_path = output_path
+        self.status_label.setText(f"转换成功: {os.path.basename(output_path)}")
+        self.progress_bar.setVisible(False)
+        self.open_pdf_button.setEnabled(True)
+        self.reset_button.setEnabled(True)
+        
+        # 更改文件区域样式，表示转换成功
+        self.file_info_frame.setStyleSheet("""
+            background-color: #e8f5e9;
+            border: 1px solid #4caf50;
+            border-radius: 5px;
+            padding: 10px;
+        """)
+        
+        # 如果勾选了图片式PDF选项，则将PDF转换为图片式PDF
+        if self.image_pdf_checkbox.isChecked():
+            try:
+                self.status_label.setText("正在转换为图片式PDF...")
+                QApplication.processEvents()
                 
-                # 更改文件区域样式，表示转换失败
+                # 转换为图片式PDF
+                final_pdf = self.output_pdf_path.replace('.pdf', '_image.pdf')
+                self.converter.convert_pdf_to_image_pdf(self.output_pdf_path, final_pdf)
+                self.output_pdf_path = final_pdf
+                
+                self.status_label.setText(f"转换成功: {os.path.basename(self.output_pdf_path)}")
+            except Exception as e:
+                self.status_label.setText(f"图片式PDF转换失败: {str(e)}")
                 self.file_info_frame.setStyleSheet("""
                     background-color: #ffebee;
                     border: 1px solid #f44336;
                     border-radius: 5px;
                     padding: 10px;
                 """)
-                
-            finally:
-                self.progress_bar.setVisible(False)
-                # 重新启用按钮
-                self.reset_button.setEnabled(True)
-        else:
-            self.status_label.setText("请先拖放Excel文件")
-    
+
+    def handle_conversion_failed(self, error_msg):
+        """处理转换失败"""
+        self.status_label.setText(f"转换失败: {error_msg}")
+        self.progress_bar.setVisible(False)
+        self.reset_button.setEnabled(True)
+        
+        # 更改文件区域样式，表示转换失败
+        self.file_info_frame.setStyleSheet("""
+            background-color: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 5px;
+            padding: 10px;
+        """)
+
+    def start_conversion(self, file_path):
+        """开始转换过程"""
+        try:
+            # 准备输出路径
+            filename = os.path.basename(file_path)
+            base_name = os.path.splitext(filename)[0]
+            output_dir = "output"  # 直接使用output目录，不再使用子目录
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, f"{base_name}.pdf")
+            
+            # 更新UI状态
+            self.status_label.setText("正在转换...")
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(0)
+            self.reset_button.setEnabled(False)
+            
+            # 创建并启动转换线程
+            self.conversion_thread = self.ConversionThread(self.converter, file_path, output_path)
+            self.conversion_thread.progress_updated.connect(self.handle_progress_update)
+            self.conversion_thread.conversion_finished.connect(self.handle_conversion_finished)
+            self.conversion_thread.conversion_failed.connect(self.handle_conversion_failed)
+            self.conversion_thread.start()
+            
+        except Exception as e:
+            self.status_label.setText(f"转换失败: {str(e)}")
+            self.progress_bar.setVisible(False)
+            self.reset_button.setEnabled(True)
+
     def reset_ui(self):
         """重置UI到初始状态"""
         self.file_name_label.setText("未选择文件")
@@ -376,90 +404,50 @@ class OptionTab(QWidget):
 
     # 添加拖放事件处理方法
     def dragEnterEvent(self, event):
-        """当用户拖动文件进入窗口时触发"""
-        if event.mimeData().hasUrls():
-            # 检查是否是Excel文件
-            for url in event.mimeData().urls():
-                file_path = url.toLocalFile()
-                if file_path.endswith('.xlsx'):
-                    # 如果是Excel文件，接受拖放
-                    self.file_info_frame.setStyleSheet("""
-                        background-color: #e3f2fd;
-                        border: 2px dashed #1976D2;
-                        border-radius: 5px;
-                        padding: 10px;
-                    """)
-                    event.accept()
-                    return
-        event.ignore()
+        """处理拖入事件"""
+        if event.mimeData().hasUrls() and event.mimeData().urls()[0].toLocalFile().endswith('.xlsx'):
+            event.acceptProposedAction()
+            self.file_info_frame.setStyleSheet("""
+                background-color: #e3f2fd;
+                border: 2px dashed #2196f3;
+                border-radius: 5px;
+                padding: 10px;
+            """)
     
     def dragLeaveEvent(self, event):
-        """当用户拖动文件离开窗口时触发"""
-        # 恢复原来的样式
+        """处理拖离事件"""
         self.file_info_frame.setStyleSheet("""
-            background-color: #f8f9fa;
+            background-color: #ffffff;
             border: 1px dashed #cccccc;
             border-radius: 5px;
             padding: 10px;
         """)
-        event.accept()
     
     def dropEvent(self, event):
-        """当用户放下文件时触发"""
-        # 恢复原来的样式 - 不需要在这里恢复，因为process_dropped_file会设置新样式
-        # self.file_info_frame.setStyleSheet("""
-        #     background-color: #f8f9fa;
-        #     border-radius: 5px;
-        #     padding: 10px;
-        # """)
-        
-        # 处理拖放的文件
-        if event.mimeData().hasUrls():
-            for url in event.mimeData().urls():
-                file_path = url.toLocalFile()
-                if file_path.endswith('.xlsx'):
-                    # 处理Excel文件
-                    self.process_dropped_file(file_path)
-                    break
-        event.accept()
-    
-    def process_dropped_file(self, file_path):
-        """处理拖放的Excel文件"""
-        self.selected_file = file_path
-        file_name = os.path.basename(file_path)
-        
-        # 更新UI - 显示文件已选择
-        self.file_name_label.setText(file_name)
-        self.file_path_label.setText(file_path)
-        self.status_label.setText(f"已选择: {file_name}")
-        
-        # 隐藏拖放提示
-        self.drop_hint_label.setVisible(False)
-        
-        # 重置PDF按钮状态
-        self.open_pdf_button.setEnabled(False)
-        self.output_pdf_path = None
-        
-        # 显示准备转换的状态
-        self.status_label.setText("准备转换...")
-        
-        # 禁用重置按钮，防止转换过程中重置
-        self.reset_button.setEnabled(False)
-        
-        # 更改文件区域样式，表示正在处理
-        self.file_info_frame.setStyleSheet("""
-            background-color: #fff8e1;
-            border: 1px dashed #ffc107;
-            border-radius: 5px;
-            padding: 10px;
-        """)
-        
-        # 让UI有时间更新
-        QApplication.processEvents()
-        
-        # 延迟一小段时间后开始转换，让用户能看到状态变化
-        QTimer.singleShot(300, self.convert_to_pdf)
+        """处理文件拖放"""
+        file_path = event.mimeData().urls()[0].toLocalFile()
+        if file_path.endswith('.xlsx'):
+            self.file_name_label.setText(os.path.basename(file_path))
+            self.file_path_label.setText(file_path)
+            self.status_label.setText("准备转换...")
+            self.file_info_frame.setStyleSheet("""
+                background-color: #e8f5e9;
+                border: 1px solid #4caf50;
+                border-radius: 5px;
+                padding: 10px;
+            """)
+            
+            # 开始转换
+            self.start_conversion(file_path)
+        else:
+            self.status_label.setText("请选择Excel文件(.xlsx)")
+            self.file_info_frame.setStyleSheet("""
+                background-color: #ffebee;
+                border: 1px solid #f44336;
+                border-radius: 5px;
+                padding: 10px;
+            """)
 
     # Remove the existing excel_to_pdf method as it's no longer needed
     # def excel_to_pdf(self, excel_file, pdf_file):
-    #     ... existing code ... 
+    #     ... existing code ...

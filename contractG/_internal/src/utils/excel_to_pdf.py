@@ -12,8 +12,10 @@ import logging
 from pathlib import Path
 import win32com.client
 import pythoncom
-from PyPDF2 import PdfReader, PdfWriter
 import fitz  # PyMuPDF
+
+# Pillow将按需导入
+# from PIL import Image as PILImage
 
 class ExcelToPdfConverter:
     """Excel转PDF转换器"""
@@ -44,86 +46,121 @@ class ExcelToPdfConverter:
         
         return logger
     
-    def convert_to_pdf(self, excel_file, pdf_file=None, fit_to_page=True, paper_size=9):
+    def convert_to_pdf(self, excel_file, pdf_file=None, fit_to_page=True, paper_size=9, progress_callback=None):
         """
         将Excel文件转换为PDF
         
-        参数:
+        Args:
             excel_file (str): Excel文件路径
-            pdf_file (str, optional): 输出PDF文件路径，如果为None则使用Excel文件名
-            fit_to_page (bool): 是否适应页面大小，默认为True
-            paper_size (int): 纸张大小，9表示A4纸张
-            
-        返回:
+            pdf_file (str, optional): 输出PDF文件路径，默认为Excel文件同目录下同名PDF
+            fit_to_page (bool, optional): 是否自适应页面，默认True
+            paper_size (int, optional): 纸张大小，默认为9（A4）
+            progress_callback (callable, optional): 进度回调函数，接收0-100的整数参数
+        
+        Returns:
             str: 生成的PDF文件路径
         """
-        if pdf_file is None:
-            # 使用Excel文件名，但扩展名改为.pdf
-            pdf_file = os.path.splitext(excel_file)[0] + '.pdf'
-        
-        self.logger.info(f"开始转换Excel文件: {excel_file} 到 PDF: {pdf_file}")
+        excel = None
+        workbook = None
         
         try:
-            # 初始化COM
-            pythoncom.CoInitialize()
+            if progress_callback:
+                progress_callback(0)
             
-            # 创建Excel应用程序实例
-            excel = win32com.client.Dispatch("Excel.Application")
-            excel.Visible = False  # 不显示Excel窗口
-            excel.DisplayAlerts = False  # 不显示警告
+            # 确保使用绝对路径
+            excel_file = os.path.abspath(excel_file)
+            
+            # 如果未指定输出文件，使用默认路径
+            if pdf_file is None:
+                pdf_file = os.path.splitext(excel_file)[0] + '.pdf'
+            pdf_file = os.path.abspath(pdf_file)
+            
+            if progress_callback:
+                progress_callback(10)
+            
+            # 确保输出目录存在
+            os.makedirs(os.path.dirname(pdf_file), exist_ok=True)
+            
+            # 初始化COM组件
+            pythoncom.CoInitialize()
+            excel = win32com.client.DispatchEx("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            
+            if progress_callback:
+                progress_callback(30)
             
             # 打开工作簿
-            self.logger.info(f"打开工作簿: {excel_file}")
-            workbook = excel.Workbooks.Open(os.path.abspath(excel_file))
+            self.logger.info(f"Opening workbook: {excel_file}")
+            workbook = excel.Workbooks.Open(excel_file)
             
-            # 遍历所有工作表，设置打印区域和页面设置
-            for i in range(1, workbook.Worksheets.Count + 1):
-                worksheet = workbook.Worksheets(i)
-                
-                # 设置页面设置
-                worksheet.PageSetup.Zoom = False  # 禁用缩放
-                if fit_to_page:
-                    worksheet.PageSetup.FitToPagesWide = 1  # 宽度适应1页
-                    worksheet.PageSetup.FitToPagesTall = 1  # 高度适应1页
-                
-                # 设置纸张大小 (9 = A4)
-                worksheet.PageSetup.PaperSize = paper_size
-                
-                # 设置页边距（厘米）
-                worksheet.PageSetup.LeftMargin = excel.CentimetersToPoints(1.5)
-                worksheet.PageSetup.RightMargin = excel.CentimetersToPoints(1.5)
-                worksheet.PageSetup.TopMargin = excel.CentimetersToPoints(1.5)
-                worksheet.PageSetup.BottomMargin = excel.CentimetersToPoints(1.5)
-                
-                # 设置页眉页脚
-                worksheet.PageSetup.LeftHeader = ""
-                worksheet.PageSetup.CenterHeader = ""
-                worksheet.PageSetup.RightHeader = ""
-                worksheet.PageSetup.LeftFooter = ""
-                worksheet.PageSetup.CenterFooter = ""
-                worksheet.PageSetup.RightFooter = ""
-                
-                # 设置打印方向（1=纵向，2=横向）
-                worksheet.PageSetup.Orientation = 1
+            if progress_callback:
+                progress_callback(50)
             
-            # 导出为PDF
-            self.logger.info(f"导出为PDF: {pdf_file}")
-            workbook.ExportAsFixedFormat(0, os.path.abspath(pdf_file))
+            try:
+                # 设置打印区域和页面设置
+                for sheet in workbook.Worksheets:
+                    if fit_to_page:
+                        sheet.PageSetup.Zoom = False
+                        sheet.PageSetup.FitToPagesWide = 1
+                        sheet.PageSetup.FitToPagesTall = False
+                    sheet.PageSetup.PaperSize = paper_size
+                
+                if progress_callback:
+                    progress_callback(70)
+                
+                # 导出为PDF
+                self.logger.info(f"Exporting to PDF: {pdf_file}")
+                workbook.ExportAsFixedFormat(0, pdf_file)
+                
+                if progress_callback:
+                    progress_callback(90)
+                
+            finally:
+                # 确保工作簿被正确关闭
+                if workbook is not None:
+                    try:
+                        workbook.Close(False)
+                    except:
+                        pass
+                    workbook = None
+                
+                # 确保Excel实例被正确退出
+                if excel is not None:
+                    try:
+                        excel.Quit()
+                    except:
+                        pass
+                    excel = None
+                
+                if progress_callback:
+                    progress_callback(100)
             
-            # 关闭工作簿
-            workbook.Close(False)
+            # 验证PDF文件是否成功生成
+            if not os.path.exists(pdf_file):
+                raise Exception("PDF文件未能成功生成")
             
-            # 退出Excel
-            excel.Quit()
-            
-            self.logger.info(f"Excel文件成功转换为PDF: {pdf_file}")
             return pdf_file
             
         except Exception as e:
-            self.logger.error(f"转换Excel到PDF时出错: {str(e)}")
-            raise
+            self.logger.error(f"Error converting Excel to PDF: {str(e)}")
+            raise Exception(f"转换Excel到PDF时出错: {str(e)}")
+            
         finally:
-            # 释放COM资源
+            # 确保资源被释放
+            if workbook is not None:
+                try:
+                    workbook.Close(False)
+                except:
+                    pass
+            
+            if excel is not None:
+                try:
+                    excel.Quit()
+                except:
+                    pass
+            
+            # 释放COM组件
             pythoncom.CoUninitialize()
     
     def add_image_to_pdf(self, pdf_file, image_file, position='right-bottom', output_pdf=None):

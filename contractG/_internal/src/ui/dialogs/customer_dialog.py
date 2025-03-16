@@ -13,10 +13,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                             QLineEdit, QPushButton, QMessageBox, QPlainTextEdit)
 from PyQt5.QtCore import Qt, pyqtSignal
 
-# 添加项目根目录到Python路径
-project_root = str(Path(__file__).parent.parent.parent.parent)
-if project_root not in sys.path:
-    sys.path.append(project_root)
+# 注意：路径设置已由path_setup模块处理，不需要在这里重复设置
 
 from src.models.customer import Customer
 from src.utils.text_parser import TextParser

@@ -58,7 +58,7 @@ class ConfigManager:
             config['General'] = {
                 'contract_template': 'templates/contract_template.xlsx',
                 'quote_template': 'templates/quote_template.xlsx',
-                'output_dir': 'output/contracts'
+                'output_dir': 'output'  # 直接使用output目录，不再使用子目录
             }
             
             with open(self.settings_file, 'w', encoding='utf-8') as f:

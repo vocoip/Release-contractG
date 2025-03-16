@@ -1,2 +1,2 @@
 @echo off 
-start ./contractG.exe 
+start contractG.exe 

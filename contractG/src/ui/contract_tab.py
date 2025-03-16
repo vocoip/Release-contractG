@@ -24,10 +24,7 @@ from pypinyin import lazy_pinyin, Style
 from pathlib import Path
 from PyQt5.QtWidgets import QApplication, QStyle
 
-# 添加项目根目录到Python路径
-project_root = str(Path(__file__).parent.parent.parent)
-if project_root not in sys.path:
-    sys.path.append(project_root)
+# 注意：路径设置已由path_setup模块处理，不需要在这里重复设置
 
 from src.database.excel_manager import ExcelManager
 from src.utils.config_manager import ConfigManager

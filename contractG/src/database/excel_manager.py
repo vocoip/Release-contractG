@@ -2,15 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-Excel数据管理模块
+Excel数据管理模块 - 使用openpyxl替代pandas
 """
 
 import os
 import sys
 from pathlib import Path
-from typing import List
-import pandas as pd
-import json
+from typing import List, Dict, Any
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Font
 
 # 添加项目根目录到Python路径
 project_root = str(Path(__file__).parent.parent.parent)
@@ -38,17 +39,20 @@ class ExcelManager:
         # 客户数据文件
         if not self.customers_file.exists():
             # 创建空的客户数据文件
-            df = pd.DataFrame(columns=[
-                'name', 'contact', 'phone', 'address', 
-                'bank_name', 'bank_account', 'tax_id'
-            ])
-            df.to_excel(self.customers_file, index=False)
+            wb = Workbook()
+            ws = wb.active
+            headers = ['name', 'contact', 'phone', 'address', 'bank_name', 'bank_account', 'tax_id']
+            ws.append(headers)
+            wb.save(str(self.customers_file))
         
         # 商品数据文件
         if not self.products_file.exists():
             # 创建空的商品数据文件
-            df = pd.DataFrame(columns=['name', 'model', 'unit', 'price'])
-            df.to_excel(self.products_file, index=False)
+            wb = Workbook()
+            ws = wb.active
+            headers = ['name', 'model', 'unit', 'price']
+            ws.append(headers)
+            wb.save(str(self.products_file))
     
     def load_customers(self) -> List[Customer]:
         """加载客户数据"""
@@ -56,18 +60,26 @@ class ExcelManager:
             return []
         
         try:
-            df = pd.read_excel(str(self.customers_file))
+            wb = load_workbook(str(self.customers_file))
+            ws = wb.active
             customers = []
             
-            for _, row in df.iterrows():
+            # 获取表头
+            headers = [cell.value for cell in ws[1]]
+            
+            # 从第二行开始读取数据
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                # 创建行数据字典
+                row_data = dict(zip(headers, row))
+                
                 customer = Customer(
-                    name=str(row.get('name', '')),
-                    contact=str(row.get('contact', '')),
-                    phone=str(row.get('phone', '')),
-                    address=str(row.get('address', '')),
-                    bank_name=str(row.get('bank_name', '')),
-                    bank_account=str(row.get('bank_account', '')),
-                    tax_id=str(row.get('tax_id', ''))
+                    name=str(row_data.get('name', '')),
+                    contact=str(row_data.get('contact', '')),
+                    phone=str(row_data.get('phone', '')),
+                    address=str(row_data.get('address', '')),
+                    bank_name=str(row_data.get('bank_name', '')),
+                    bank_account=str(row_data.get('bank_account', '')),
+                    tax_id=str(row_data.get('tax_id', ''))
                 )
                 customers.append(customer)
             
@@ -78,23 +90,29 @@ class ExcelManager:
     def save_customers(self, customers: List[Customer]) -> bool:
         """保存客户数据"""
         try:
-            # 转换为DataFrame
-            data = []
-            for customer in customers:
-                data.append({
-                    'name': customer.name,
-                    'contact': customer.contact,
-                    'phone': customer.phone,
-                    'address': customer.address,
-                    'bank_name': customer.bank_name,
-                    'bank_account': customer.bank_account,
-                    'tax_id': customer.tax_id
-                })
+            # 创建工作簿
+            wb = Workbook()
+            ws = wb.active
             
-            df = pd.DataFrame(data)
+            # 添加表头
+            headers = ['name', 'contact', 'phone', 'address', 'bank_name', 'bank_account', 'tax_id']
+            ws.append(headers)
+            
+            # 添加数据
+            for customer in customers:
+                row = [
+                    customer.name,
+                    customer.contact,
+                    customer.phone,
+                    customer.address,
+                    customer.bank_name,
+                    customer.bank_account,
+                    customer.tax_id
+                ]
+                ws.append(row)
             
             # 保存到Excel文件
-            df.to_excel(str(self.customers_file), index=False)
+            wb.save(str(self.customers_file))
             return True
         except Exception as e:
             raise Exception(f"保存客户数据失败：{str(e)}")
@@ -103,17 +121,24 @@ class ExcelManager:
         """导入客户数据"""
         try:
             # 读取Excel文件
-            df = pd.read_excel(file_path)
+            wb = load_workbook(file_path)
+            ws = wb.active
+            
+            # 获取表头
+            headers = [cell.value for cell in ws[1]]
             
             # 验证必要的列是否存在
             required_columns = ['name', 'contact', 'phone']
-            missing_columns = [col for col in required_columns if col not in df.columns]
+            missing_columns = [col for col in required_columns if col not in headers]
             
             if missing_columns:
                 # 创建模板文件
                 template_path = os.path.join(os.path.dirname(file_path), "客户导入模板.xlsx")
-                template_df = pd.DataFrame(columns=['name', 'contact', 'phone', 'address', 'bank_name', 'bank_account', 'tax_id'])
-                template_df.to_excel(template_path, index=False)
+                template_wb = Workbook()
+                template_ws = template_wb.active
+                template_headers = ['name', 'contact', 'phone', 'address', 'bank_name', 'bank_account', 'tax_id']
+                template_ws.append(template_headers)
+                template_wb.save(template_path)
                 
                 raise Exception(
                     f"导入文件缺少必要的列：{', '.join(missing_columns)}\n"
@@ -121,27 +146,31 @@ class ExcelManager:
                     "请使用正确的模板文件重新导入！"
                 )
             
+            # 创建列名到索引的映射
+            header_map = {header: idx for idx, header in enumerate(headers)}
+            
             # 导入客户数据
             new_customers = []
             validation_errors = []
             
-            for index, row in df.iterrows():
+            # 从第二行开始读取数据
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
                 try:
                     # 验证必填字段
-                    name = str(row['name']).strip()
-                    contact = str(row['contact']).strip()
-                    phone = str(row['phone']).strip()
+                    name = str(row[header_map['name']]).strip() if row[header_map['name']] else ""
+                    contact = str(row[header_map['contact']]).strip() if row[header_map['contact']] else ""
+                    phone = str(row[header_map['phone']]).strip() if row[header_map['phone']] else ""
                     
                     if not name:
-                        validation_errors.append(f"第 {index + 2} 行：公司名称不能为空")
+                        validation_errors.append(f"第 {row_idx} 行：公司名称不能为空")
                         continue
                     
                     if not contact:
-                        validation_errors.append(f"第 {index + 2} 行：联系人不能为空")
+                        validation_errors.append(f"第 {row_idx} 行：联系人不能为空")
                         continue
                     
                     if not phone:
-                        validation_errors.append(f"第 {index + 2} 行：电话不能为空")
+                        validation_errors.append(f"第 {row_idx} 行：电话不能为空")
                         continue
                     
                     # 创建客户对象
@@ -149,15 +178,15 @@ class ExcelManager:
                         name=name,
                         contact=contact,
                         phone=phone,
-                        address=str(row.get('address', '')).strip(),
-                        bank_name=str(row.get('bank_name', '')).strip(),
-                        bank_account=str(row.get('bank_account', '')).strip(),
-                        tax_id=str(row.get('tax_id', '')).strip()
+                        address=str(row[header_map.get('address', -1)] or '').strip(),
+                        bank_name=str(row[header_map.get('bank_name', -1)] or '').strip(),
+                        bank_account=str(row[header_map.get('bank_account', -1)] or '').strip(),
+                        tax_id=str(row[header_map.get('tax_id', -1)] or '').strip()
                     )
                     new_customers.append(customer)
                 
                 except Exception as e:
-                    validation_errors.append(f"第 {index + 2} 行：数据格式错误 - {str(e)}")
+                    validation_errors.append(f"第 {row_idx} 行：数据格式错误 - {str(e)}")
             
             # 如果有验证错误
             if validation_errors:
@@ -175,40 +204,49 @@ class ExcelManager:
     def export_customers(self, customers: List[Customer], file_path: str):
         """导出客户数据"""
         try:
-            # 转换为DataFrame
-            data = []
+            # 创建工作簿
+            wb = Workbook()
+            ws = wb.active
+            ws.title = '客户数据'
+            
+            # 添加表头
+            headers = ['公司名称', '联系人', '电话', '地址', '开户银行', '银行账号', '税号']
+            ws.append(headers)
+            
+            # 设置表头样式
+            header_font = Font(bold=True)
+            for cell in ws[1]:
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center')
+            
+            # 添加数据
             for customer in customers:
-                data.append({
-                    '公司名称': customer.name,
-                    '联系人': customer.contact,
-                    '电话': customer.phone,
-                    '地址': customer.address,
-                    '开户银行': customer.bank_name,
-                    '银行账号': customer.bank_account,
-                    '税号': customer.tax_id
-                })
-            
-            df = pd.DataFrame(data)
-            
-            # 设置Excel写入器
-            writer = pd.ExcelWriter(file_path, engine='openpyxl')
-            
-            # 写入数据
-            df.to_excel(writer, index=False, sheet_name='客户数据')
-            
-            # 获取工作表
-            worksheet = writer.sheets['客户数据']
+                row = [
+                    customer.name,
+                    customer.contact,
+                    customer.phone,
+                    customer.address,
+                    customer.bank_name,
+                    customer.bank_account,
+                    customer.tax_id
+                ]
+                ws.append(row)
             
             # 调整列宽
-            for idx, col in enumerate(df.columns):
-                max_length = max(
-                    df[col].astype(str).apply(len).max(),  # 最长数据长度
-                    len(col)  # 列名长度
-                )
-                worksheet.column_dimensions[chr(65 + idx)].width = max_length + 4
+            for idx, col in enumerate(headers, 1):
+                # 计算列的最大宽度
+                max_length = len(col)
+                column_letter = get_column_letter(idx)
+                
+                for row_idx in range(2, ws.max_row + 1):
+                    cell_value = ws.cell(row=row_idx, column=idx).value
+                    if cell_value:
+                        max_length = max(max_length, len(str(cell_value)))
+                
+                ws.column_dimensions[column_letter].width = max_length + 4
             
             # 保存文件
-            writer.close()
+            wb.save(file_path)
         
         except Exception as e:
             raise Exception(f"导出客户数据失败：{str(e)}")
@@ -219,11 +257,19 @@ class ExcelManager:
             if not self.products_file.exists():
                 return []
             
-            df = pd.read_excel(str(self.products_file))
+            wb = load_workbook(str(self.products_file))
+            ws = wb.active
             products = []
             
-            for _, row in df.iterrows():
-                product = Product.from_dict(row.to_dict())
+            # 获取表头
+            headers = [cell.value for cell in ws[1]]
+            
+            # 从第二行开始读取数据
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                # 创建行数据字典
+                row_data = dict(zip(headers, row))
+                
+                product = Product.from_dict(row_data)
                 products.append(product)
             
             return products
@@ -234,9 +280,22 @@ class ExcelManager:
     def save_products(self, products):
         """保存产品数据到Excel"""
         try:
-            data = [product.to_dict() for product in products]
-            df = pd.DataFrame(data)
-            df.to_excel(str(self.products_file), index=False)
+            # 创建工作簿
+            wb = Workbook()
+            ws = wb.active
+            
+            # 添加表头
+            headers = ['name', 'model', 'unit', 'price']
+            ws.append(headers)
+            
+            # 添加数据
+            for product in products:
+                product_dict = product.to_dict()
+                row = [product_dict.get(header, '') for header in headers]
+                ws.append(row)
+            
+            # 保存到Excel文件
+            wb.save(str(self.products_file))
             return True
         except Exception as e:
             print(f"保存商品数据出错: {e}")

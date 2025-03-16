@@ -18,11 +18,8 @@ from PyQt5.QtCore import Qt, QSettings, QSize
 from PyQt5.QtGui import QIcon, QFont, QPixmap, QColor
 import datetime
 
-# 添加项目根目录到Python路径
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(current_dir))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# 导入路径设置模块（如果需要）
+# 注意：由于path_setup模块在导入时已经自动设置了路径，这里不需要再次导入
 
 # 使用绝对导入
 from src.ui.customer_tab import CustomerTab

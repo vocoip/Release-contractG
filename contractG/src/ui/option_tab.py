@@ -1,13 +1,12 @@
 import os
-import sys
 import threading
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, 
     QProgressBar, QHBoxLayout, QFrame, QGroupBox, QSplitter, 
     QSpacerItem, QSizePolicy, QApplication, QCheckBox
 )
-from PyQt5.QtCore import Qt, QMimeData, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QIcon, QFont, QPixmap
+from PyQt5.QtCore import Qt, QMimeData, QTimer, QThread, pyqtSignal, QUrl
+from PyQt5.QtGui import QIcon, QFont, QPixmap, QDesktopServices
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from src.utils.excel_to_pdf import ExcelToPdfConverter
@@ -389,15 +388,8 @@ class OptionTab(QWidget):
     
     def open_pdf(self):
         if self.output_pdf_path and os.path.exists(self.output_pdf_path):
-            # 打开PDF文件
-            if sys.platform == 'win32':
-                os.startfile(self.output_pdf_path)
-            elif sys.platform == 'darwin':  # macOS
-                import subprocess
-                subprocess.Popen(['open', self.output_pdf_path])
-            else:  # Linux
-                import subprocess
-                subprocess.Popen(['xdg-open', self.output_pdf_path])
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(self.output_pdf_path)):
+                self.status_label.setText("无法自动打开PDF，请手动打开")
         else:
             self.status_label.setText("PDF文件不存在，请先转换")
             self.open_pdf_button.setEnabled(False)

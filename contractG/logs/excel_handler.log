@@ -1,0 +1,6 @@
+2026-03-17 21:21:43,919 - ExcelHandler - INFO - 开始生成合同文件: SC-20260317-001
+2026-03-17 21:21:43,933 - ExcelHandler - INFO - 合同Excel文件已生成: SC-20260317-001522.xlsx
+2026-03-17 21:21:43,933 - ExcelHandler - INFO - 开始将Excel转换为PDF: SC-20260317-001522.xlsx
+2026-03-17 21:21:43,934 - ExcelHandler - INFO - Excel转换为PDF失败: macOS/Linux 下转换 Excel 为 PDF 需要安装 LibreOffice，并确保 soffice 可用
+2026-03-17 21:21:51,215 - ExcelHandler - INFO - 开始生成合同文件: SC-20260317-001
+2026-03-17 21:21:51,229 - ExcelHandler - INFO - 合同Excel文件已生成: SC-20260317-001209.xlsx

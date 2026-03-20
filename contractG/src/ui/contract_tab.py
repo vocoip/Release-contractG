@@ -17,9 +17,8 @@ from PyQt5.QtWidgets import (
     QSplitter, QSizePolicy, QFrame, QDialog, QPlainTextEdit,
     QFileDialog, QButtonGroup, QRadioButton, QGridLayout
 )
-from PyQt5.QtCore import Qt, QDate, QSize, QTimer, QSettings
-from PyQt5.QtGui import QIcon, QFont, QColor
-import subprocess
+from PyQt5.QtCore import Qt, QDate, QSize, QTimer, QSettings, QUrl
+from PyQt5.QtGui import QIcon, QFont, QColor, QDesktopServices
 from pypinyin import lazy_pinyin, Style
 from pathlib import Path
 from PyQt5.QtWidgets import QApplication, QStyle
@@ -1246,16 +1245,8 @@ class ContractTab(QWidget):
         """打开合同文件夹"""
         try:
             folder_path = self.excel_handler.get_contracts_folder()
-            
-            # 根据操作系统打开文件夹
-            if os.name == 'nt':  # Windows
-                os.startfile(folder_path)
-            elif os.name == 'posix':  # macOS 和 Linux
-                if os.path.exists('/usr/bin/open'):  # macOS
-                    subprocess.run(['open', folder_path])
-                else:  # Linux
-                    subprocess.run(['xdg-open', folder_path])
-            else:
+
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path)):
                 QMessageBox.warning(self, "警告", "无法自动打开文件夹，请手动打开。")
         except Exception as e:
             QMessageBox.warning(self, "警告", f"打开文件夹时出错：{str(e)}")

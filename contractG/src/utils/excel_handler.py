@@ -14,7 +14,6 @@ from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image
 from openpyxl.cell.rich_text import TextBlock, InlineFont
 from PyQt5.QtWidgets import QMessageBox
-import win32com.client
 # Pillow将按需导入，减少启动时间和内存占用
 # from PIL import Image as PILImage
 import io
@@ -29,9 +28,15 @@ import shutil
 import tempfile
 import sys
 from pathlib import Path
-import pythoncom
-import fitz  # PyMuPDF
 import logging
+import subprocess
+
+try:
+    import win32com.client
+    import pythoncom
+    WIN32COM_AVAILABLE = True
+except ImportError:
+    WIN32COM_AVAILABLE = False
 
 # 导入PyMuPDF库
 try:
@@ -116,6 +121,17 @@ class ExcelHandler:
         logger.addHandler(file_handler)
         
         return logger
+
+    def _find_soffice(self):
+        candidates = [
+            shutil.which("soffice"),
+            shutil.which("libreoffice"),
+            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        ]
+        for c in candidates:
+            if c and os.path.exists(c):
+                return c
+        return None
     
     def get_contracts_folder(self):
         """获取合同文件夹路径，用于前端打开文件夹按钮"""
@@ -238,46 +254,77 @@ class ExcelHandler:
         self.log(f"开始将Excel转换为PDF: {os.path.basename(excel_file)}")
         
         try:
-            # 复用Excel实例（首次使用时初始化）
-            if not hasattr(self, '_excel_app'):
-                pythoncom.CoInitialize()
-                self._excel_app = win32com.client.Dispatch("Excel.Application")
-                self._excel_app.Visible = False
-                self._excel_app.DisplayAlerts = False
-            
-            # 使用缓存实例打开文件
-            workbook = self._excel_app.Workbooks.Open(os.path.abspath(excel_file))
-            
-            # 转换为PDF
-            # 添加进度监控（模拟进度）
-            for i in range(1, 6):
-                time.sleep(0.5)  # 模拟转换阶段
-                if progress_callback:
-                    progress_callback(i*20)
-            
-            workbook.ExportAsFixedFormat(
-                Type=0,
-                Filename=os.path.abspath(pdf_file),
-                Quality=0,
-                IncludeDocProperties=True,
-                IgnorePrintAreas=False,
-                OpenAfterPublish=False
-            )
-            
-            # 保持工作簿打开状态复用
-            workbook.Close(False)
-            
-            # 不再立即释放资源
-            # 新增清理方法供类销毁时调用
-            # def __del__(self):
-            #     if hasattr(self, '_excel_app'):
-            #         self._excel_app.Quit()
-            #         del self._excel_app
-            #         pythoncom.CoUninitialize()
-            
+            if sys.platform == "win32":
+                if not WIN32COM_AVAILABLE:
+                    raise Exception("Windows 下 Excel 转 PDF 需要安装 pywin32 与 Microsoft Excel")
+
+                if not hasattr(self, '_excel_app'):
+                    pythoncom.CoInitialize()
+                    self._excel_app = win32com.client.Dispatch("Excel.Application")
+                    self._excel_app.Visible = False
+                    self._excel_app.DisplayAlerts = False
+
+                workbook = self._excel_app.Workbooks.Open(os.path.abspath(excel_file))
+
+                for i in range(1, 6):
+                    time.sleep(0.5)
+                    if progress_callback:
+                        progress_callback(i * 20)
+
+                workbook.ExportAsFixedFormat(
+                    Type=0,
+                    Filename=os.path.abspath(pdf_file),
+                    Quality=0,
+                    IncludeDocProperties=True,
+                    IgnorePrintAreas=False,
+                    OpenAfterPublish=False
+                )
+
+                workbook.Close(False)
+
+                self.log(f"Excel转换为PDF成功: {os.path.basename(pdf_file)}")
+                return pdf_file
+
+            soffice = self._find_soffice()
+            if not soffice:
+                raise Exception("macOS/Linux 下转换 Excel 为 PDF 需要安装 LibreOffice，并确保 soffice 可用")
+
+            if progress_callback:
+                progress_callback(20)
+
+            out_dir = os.path.dirname(os.path.abspath(pdf_file))
+            os.makedirs(out_dir, exist_ok=True)
+
+            cmd = [
+                soffice,
+                "--headless",
+                "--nologo",
+                "--nolockcheck",
+                "--norestore",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                out_dir,
+                os.path.abspath(excel_file),
+            ]
+
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+            if progress_callback:
+                progress_callback(90)
+
+            if result.returncode != 0:
+                self.log(f"LibreOffice转换失败: {result.stderr.strip()}")
+                raise Exception("LibreOffice 转换失败，请检查 Excel 文件格式与 LibreOffice 安装状态")
+
+            if not os.path.exists(pdf_file):
+                raise Exception("PDF文件未能成功生成")
+
+            if progress_callback:
+                progress_callback(100)
+
             self.log(f"Excel转换为PDF成功: {os.path.basename(pdf_file)}")
             return pdf_file
-            
         except Exception as e:
             self.log(f"Excel转换为PDF失败: {str(e)}")
             raise

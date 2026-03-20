@@ -21,13 +21,28 @@
 
 ## 🚀 快速开始
 
-1. 双击`启动合同生成工具.bat`
+### Windows（打包版）
+
+1. 双击`start_contractG.bat`（或直接运行`contractG.exe`）
 2. 配置您的公司信息和印章
 3. 添加客户和商品信息
 4. 切换到"合同生成"标签页
 5. 选择客户、添加商品、设置合同信息
 6. 点击"生成合同"按钮
 7. 完成！合同和报价单已生成
+
+### macOS / Linux（从源代码运行）
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 src/launcher.py
+```
+
+如需使用“Excel 转 PDF”：
+- Windows：依赖本机安装的 Microsoft Excel（通过 COM 导出）
+- macOS / Linux：需要安装 LibreOffice，并确保 `soffice` 可用（程序会自动调用它完成转换）
 
 ## 📋 详细功能
 
@@ -69,7 +84,7 @@
 
 ## 💻 系统要求
 
-- **操作系统**: Windows 7/8/10/11
+- **操作系统**: Windows 7/8/10/11（打包版）；macOS / Linux（从源代码运行）
 - **内存**: 最低2GB RAM
 - **存储空间**: 至少200MB可用空间
 
@@ -357,4 +372,3 @@ contractG/
 - **联系开发者**: 通过电子邮件联系技术支持团队
 
 </details>
-

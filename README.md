@@ -28,7 +28,22 @@ contractG是一款专为企业设计的合同生成工具，使用Python和PyQt5
 
 1. 从GitHub下载最新版本
 2. 解压到本地目录（建议非系统盘）
-3. 双击`启动合同生成工具.bat`或`contractG.exe`运行程序
+3. Windows：双击`start_contractG.bat`或`contractG.exe`运行程序
+4. macOS：从源代码运行（见下方“macOS 运行”）
+
+### macOS 运行
+
+1. 安装 Python 3（建议 3.10+）
+2. 进入 `contractG` 目录，安装依赖
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 src/launcher.py
+```
+
+3. 如需使用“Excel 转 PDF”，macOS 需要安装 LibreOffice，并确保 `soffice` 可用（项目会自动调用它完成转换）
 
 ### 初始设置
 

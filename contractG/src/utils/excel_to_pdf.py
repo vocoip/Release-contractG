@@ -9,9 +9,9 @@ Excel转PDF工具
 import os
 import sys
 import logging
+import shutil
+import subprocess
 from pathlib import Path
-import win32com.client
-import pythoncom
 import fitz  # PyMuPDF
 
 # Pillow将按需导入
@@ -23,6 +23,168 @@ class ExcelToPdfConverter:
     def __init__(self, log_dir='logs'):
         """初始化转换器"""
         self.logger = self._setup_logger(log_dir)
+
+    def _find_soffice(self):
+        candidates = [
+            shutil.which("soffice"),
+            shutil.which("libreoffice"),
+            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        ]
+        for c in candidates:
+            if c and os.path.exists(c):
+                return c
+        return None
+
+    def _convert_with_com(self, excel_file, pdf_file, fit_to_page=True, paper_size=9, progress_callback=None):
+        try:
+            import win32com.client
+            import pythoncom
+        except Exception as e:
+            raise Exception(f"Windows 平台缺少 pywin32，无法通过 Excel COM 转 PDF: {str(e)}")
+
+        excel = None
+        workbook = None
+
+        try:
+            if progress_callback:
+                progress_callback(0)
+
+            excel_file = os.path.abspath(excel_file)
+            pdf_file = os.path.abspath(pdf_file)
+
+            if progress_callback:
+                progress_callback(10)
+
+            os.makedirs(os.path.dirname(pdf_file), exist_ok=True)
+
+            pythoncom.CoInitialize()
+            excel = win32com.client.DispatchEx("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+
+            if progress_callback:
+                progress_callback(30)
+
+            self.logger.info(f"Opening workbook: {excel_file}")
+            workbook = excel.Workbooks.Open(excel_file)
+
+            if progress_callback:
+                progress_callback(50)
+
+            try:
+                for sheet in workbook.Worksheets:
+                    if fit_to_page:
+                        sheet.PageSetup.Zoom = False
+                        sheet.PageSetup.FitToPagesWide = 1
+                        sheet.PageSetup.FitToPagesTall = False
+                    sheet.PageSetup.PaperSize = paper_size
+
+                if progress_callback:
+                    progress_callback(70)
+
+                self.logger.info(f"Exporting to PDF: {pdf_file}")
+                workbook.ExportAsFixedFormat(0, pdf_file)
+
+                if progress_callback:
+                    progress_callback(90)
+            finally:
+                if workbook is not None:
+                    try:
+                        workbook.Close(False)
+                    except:
+                        pass
+                    workbook = None
+
+                if excel is not None:
+                    try:
+                        excel.Quit()
+                    except:
+                        pass
+                    excel = None
+
+                if progress_callback:
+                    progress_callback(100)
+
+            if not os.path.exists(pdf_file):
+                raise Exception("PDF文件未能成功生成")
+
+            return pdf_file
+        except Exception as e:
+            self.logger.error(f"Error converting Excel to PDF: {str(e)}")
+            raise Exception(f"转换Excel到PDF时出错: {str(e)}")
+        finally:
+            if workbook is not None:
+                try:
+                    workbook.Close(False)
+                except:
+                    pass
+
+            if excel is not None:
+                try:
+                    excel.Quit()
+                except:
+                    pass
+
+            try:
+                pythoncom.CoUninitialize()
+            except:
+                pass
+
+    def _convert_with_libreoffice(self, excel_file, pdf_file, progress_callback=None):
+        soffice = self._find_soffice()
+        if not soffice:
+            raise Exception("macOS/Linux 下转换 Excel 为 PDF 需要安装 LibreOffice，并确保 soffice 可用")
+
+        excel_file = os.path.abspath(excel_file)
+        pdf_file = os.path.abspath(pdf_file)
+
+        if progress_callback:
+            progress_callback(0)
+
+        out_dir = os.path.dirname(pdf_file)
+        os.makedirs(out_dir, exist_ok=True)
+
+        if progress_callback:
+            progress_callback(30)
+
+        base_name = os.path.splitext(os.path.basename(excel_file))[0]
+        produced_pdf = os.path.join(out_dir, f"{base_name}.pdf")
+
+        cmd = [
+            soffice,
+            "--headless",
+            "--nologo",
+            "--nolockcheck",
+            "--norestore",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            out_dir,
+            excel_file,
+        ]
+
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        if progress_callback:
+            progress_callback(80)
+
+        if result.returncode != 0:
+            self.logger.error(f"LibreOffice convert failed: {result.stderr.strip()}")
+            raise Exception("LibreOffice 转换失败，请检查 Excel 文件格式与 LibreOffice 安装状态")
+
+        if not os.path.exists(produced_pdf):
+            self.logger.error(f"Expected PDF not found: {produced_pdf}")
+            raise Exception("PDF文件未能成功生成")
+
+        if produced_pdf != pdf_file:
+            if os.path.exists(pdf_file):
+                os.remove(pdf_file)
+            os.replace(produced_pdf, pdf_file)
+
+        if progress_callback:
+            progress_callback(100)
+
+        return pdf_file
     
     def _setup_logger(self, log_dir):
         """设置日志记录器"""
@@ -60,9 +222,6 @@ class ExcelToPdfConverter:
         Returns:
             str: 生成的PDF文件路径
         """
-        excel = None
-        workbook = None
-        
         try:
             if progress_callback:
                 progress_callback(0)
@@ -74,94 +233,27 @@ class ExcelToPdfConverter:
             if pdf_file is None:
                 pdf_file = os.path.splitext(excel_file)[0] + '.pdf'
             pdf_file = os.path.abspath(pdf_file)
-            
-            if progress_callback:
-                progress_callback(10)
-            
-            # 确保输出目录存在
-            os.makedirs(os.path.dirname(pdf_file), exist_ok=True)
-            
-            # 初始化COM组件
-            pythoncom.CoInitialize()
-            excel = win32com.client.DispatchEx("Excel.Application")
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            
-            if progress_callback:
-                progress_callback(30)
-            
-            # 打开工作簿
-            self.logger.info(f"Opening workbook: {excel_file}")
-            workbook = excel.Workbooks.Open(excel_file)
-            
-            if progress_callback:
-                progress_callback(50)
-            
-            try:
-                # 设置打印区域和页面设置
-                for sheet in workbook.Worksheets:
-                    if fit_to_page:
-                        sheet.PageSetup.Zoom = False
-                        sheet.PageSetup.FitToPagesWide = 1
-                        sheet.PageSetup.FitToPagesTall = False
-                    sheet.PageSetup.PaperSize = paper_size
-                
-                if progress_callback:
-                    progress_callback(70)
-                
-                # 导出为PDF
-                self.logger.info(f"Exporting to PDF: {pdf_file}")
-                workbook.ExportAsFixedFormat(0, pdf_file)
-                
-                if progress_callback:
-                    progress_callback(90)
-                
-            finally:
-                # 确保工作簿被正确关闭
-                if workbook is not None:
-                    try:
-                        workbook.Close(False)
-                    except:
-                        pass
-                    workbook = None
-                
-                # 确保Excel实例被正确退出
-                if excel is not None:
-                    try:
-                        excel.Quit()
-                    except:
-                        pass
-                    excel = None
-                
-                if progress_callback:
-                    progress_callback(100)
-            
-            # 验证PDF文件是否成功生成
-            if not os.path.exists(pdf_file):
-                raise Exception("PDF文件未能成功生成")
-            
-            return pdf_file
+
+            if sys.platform == "win32":
+                return self._convert_with_com(
+                    excel_file=excel_file,
+                    pdf_file=pdf_file,
+                    fit_to_page=fit_to_page,
+                    paper_size=paper_size,
+                    progress_callback=progress_callback,
+                )
+
+            return self._convert_with_libreoffice(
+                excel_file=excel_file,
+                pdf_file=pdf_file,
+                progress_callback=progress_callback,
+            )
             
         except Exception as e:
             self.logger.error(f"Error converting Excel to PDF: {str(e)}")
             raise Exception(f"转换Excel到PDF时出错: {str(e)}")
-            
         finally:
-            # 确保资源被释放
-            if workbook is not None:
-                try:
-                    workbook.Close(False)
-                except:
-                    pass
-            
-            if excel is not None:
-                try:
-                    excel.Quit()
-                except:
-                    pass
-            
-            # 释放COM组件
-            pythoncom.CoUninitialize()
+            pass
     
     def add_image_to_pdf(self, pdf_file, image_file, position='right-bottom', output_pdf=None):
         """

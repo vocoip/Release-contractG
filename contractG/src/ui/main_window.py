@@ -14,8 +14,8 @@ from PyQt5.QtWidgets import (
     QTextEdit, QGroupBox, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QToolBar, QStatusBar, QDockWidget, QFrame, QSplitter, QApplication, QComboBox, QHeaderView
 )
-from PyQt5.QtCore import Qt, QSettings, QSize
-from PyQt5.QtGui import QIcon, QFont, QPixmap, QColor
+from PyQt5.QtCore import Qt, QSettings, QSize, QUrl
+from PyQt5.QtGui import QIcon, QFont, QPixmap, QColor, QDesktopServices
 import datetime
 
 # 导入路径设置模块（如果需要）
@@ -988,14 +988,8 @@ class MainWindow(QMainWindow):
     
     def open_directory(self, directory):
         """打开指定目录"""
-        if sys.platform == 'win32':
-            os.startfile(directory)
-        elif sys.platform == 'darwin':  # macOS
-            import subprocess
-            subprocess.Popen(['open', directory])
-        else:  # Linux
-            import subprocess
-            subprocess.Popen(['xdg-open', directory])
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(directory)):
+            QMessageBox.warning(self, "警告", "无法自动打开文件夹，请手动打开。")
     
     def show_about(self):
         """显示关于对话框"""

@@ -15,15 +15,16 @@ from openpyxl import load_workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-# 添加当前目录到Python路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
-# 添加项目根目录到Python路径
 project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+DEBUG = os.environ.get("CONTRACTG_DEBUG") == "1"
+
+def _debug(message: str):
+    if DEBUG:
+        print(message)
 
 # 导入路径设置模块
 try:
@@ -34,7 +35,6 @@ except ImportError:
         from utils.path_setup import setup_python_path
     except ImportError:
         # 如果仍然失败，尝试直接导入
-        import sys
         sys.path.append(os.path.join(current_dir, 'utils'))
         from path_setup import setup_python_path
 
@@ -67,25 +67,25 @@ from PyQt5.QtGui import QFont, QIcon
 # 尝试使用不同的导入方式，以适应打包后的环境
 try:
     # 首先尝试直接导入（开发环境）
-    print("尝试导入方式1: from src.ui.main_window import MainWindow")
+    _debug("尝试导入方式1: from src.ui.main_window import MainWindow")
     from src.ui.main_window import MainWindow
     from src.ui.styles import GLOBAL_STYLE, FONT_FAMILY
     from src.ui.splash_screen import SplashScreen
-    print("导入方式1成功")
+    _debug("导入方式1成功")
 except ImportError as e1:
-    print(f"导入方式1失败: {e1}")
+    _debug(f"导入方式1失败: {e1}")
     try:
         # 如果失败，尝试相对导入（打包环境）
-        print("尝试导入方式2: from ui.main_window import MainWindow")
+        _debug("尝试导入方式2: from ui.main_window import MainWindow")
         from ui.main_window import MainWindow
         from ui.styles import GLOBAL_STYLE, FONT_FAMILY
         from ui.splash_screen import SplashScreen
-        print("导入方式2成功")
+        _debug("导入方式2成功")
     except ImportError as e2:
-        print(f"导入方式2失败: {e2}")
+        _debug(f"导入方式2失败: {e2}")
         try:
             # 如果还是失败，尝试直接导入
-            print("尝试导入方式3: import main_window")
+            _debug("尝试导入方式3: import main_window")
             import main_window
             import styles
             import splash_screen
@@ -93,11 +93,11 @@ except ImportError as e1:
             GLOBAL_STYLE = styles.GLOBAL_STYLE
             FONT_FAMILY = styles.FONT_FAMILY
             SplashScreen = splash_screen.SplashScreen
-            print("导入方式3成功")
+            _debug("导入方式3成功")
         except ImportError as e3:
-            print(f"导入方式3失败: {e3}")
+            _debug(f"导入方式3失败: {e3}")
             # 最后的尝试，动态加载模块
-            print("尝试导入方式4: 动态加载模块")
+            _debug("尝试导入方式4: 动态加载模块")
             import importlib.util
             
             # 尝试不同的路径
@@ -118,15 +118,15 @@ except ImportError as e1:
             
             for path in possible_paths:
                 if os.path.exists(path):
-                    print(f"找到main_window.py: {path}")
+                    _debug(f"找到main_window.py: {path}")
                     main_window_spec = importlib.util.spec_from_file_location("main_window", path)
                     styles_path = path.replace('main_window.py', 'styles.py')
                     splash_screen_path = path.replace('main_window.py', 'splash_screen.py')
                     if os.path.exists(styles_path):
-                        print(f"找到styles.py: {styles_path}")
+                        _debug(f"找到styles.py: {styles_path}")
                         styles_spec = importlib.util.spec_from_file_location("styles", styles_path)
                     if os.path.exists(splash_screen_path):
-                        print(f"找到splash_screen.py: {splash_screen_path}")
+                        _debug(f"找到splash_screen.py: {splash_screen_path}")
                         splash_screen_spec = importlib.util.spec_from_file_location("splash_screen", splash_screen_path)
                     break
             
@@ -141,9 +141,9 @@ except ImportError as e1:
                 GLOBAL_STYLE = styles_module.GLOBAL_STYLE
                 FONT_FAMILY = styles_module.FONT_FAMILY
                 SplashScreen = splash_screen_module.SplashScreen
-                print("导入方式4成功")
+                _debug("导入方式4成功")
             else:
-                print("所有导入方式都失败，无法找到必要的模块")
+                _debug("所有导入方式都失败，无法找到必要的模块")
                 raise ImportError("无法导入必要的模块: main_window.py, styles.py 和 splash_screen.py")
 
 def resource_path(relative_path):
@@ -167,7 +167,7 @@ def resource_path(relative_path):
         
         return full_path
     except Exception as e:
-        print(f"Error in resource_path: {str(e)}")
+        _debug(f"Error in resource_path: {str(e)}")
         return relative_path
 
 def config_path(relative_path):
@@ -191,7 +191,7 @@ def config_path(relative_path):
         
         return full_path
     except Exception as e:
-        print(f"Error in config_path: {str(e)}")
+        _debug(f"Error in config_path: {str(e)}")
         return relative_path
 
 def ensure_directories():
@@ -275,7 +275,7 @@ def main():
         if os.path.exists(icon_path):
             app.setWindowIcon(QIcon(icon_path))
         else:
-            print(f"警告: 图标文件未找到: {icon_path}")
+            _debug(f"警告: 图标文件未找到: {icon_path}")
         
         # 显示启动画面
         splash = SplashScreen()

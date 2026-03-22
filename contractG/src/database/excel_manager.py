@@ -6,17 +6,13 @@ Excel数据管理模块 - 使用openpyxl替代pandas
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Font
 
-# 添加项目根目录到Python路径
 project_root = str(Path(__file__).parent.parent.parent)
-if project_root not in sys.path:
-    sys.path.append(project_root)
 
 from src.models.customer import Customer
 from src.models.product import Product

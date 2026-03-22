@@ -37,11 +37,23 @@ contractG是一款专为企业设计的合同生成工具，使用Python和PyQt5
 2. 进入 `contractG` 目录，安装依赖
 
 ```bash
+cd contractG
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 src/launcher.py
 ```
+
+如果你在仓库根目录执行命令，也可以直接运行：
+```bash
+CONTRACTG_DEBUG=1 python3 launcher.py
+```
+
+也可以使用一键启动脚本（双击运行）：
+```bash
+chmod +x run.command
+```
+然后在 Finder 里双击 `contractG/run.command`。
 
 3. 如需使用“Excel 转 PDF”，macOS 需要安装 LibreOffice，并确保 `soffice` 可用（项目会自动调用它完成转换）
 

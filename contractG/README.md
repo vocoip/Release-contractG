@@ -40,6 +40,17 @@ pip install -r requirements.txt
 python3 src/launcher.py
 ```
 
+如果你在仓库根目录执行命令，也可以直接运行：
+```bash
+CONTRACTG_DEBUG=1 python3 launcher.py
+```
+
+macOS 也可以使用一键启动脚本（双击运行）：
+```bash
+chmod +x run.command
+```
+然后在 Finder 里双击 `run.command`。
+
 如需使用“Excel 转 PDF”：
 - Windows：依赖本机安装的 Microsoft Excel（通过 COM 导出）
 - macOS / Linux：需要安装 LibreOffice，并确保 `soffice` 可用（程序会自动调用它完成转换）

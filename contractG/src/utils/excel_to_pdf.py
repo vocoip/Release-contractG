@@ -190,12 +190,18 @@ class ExcelToPdfConverter:
         """设置日志记录器"""
         logger = logging.getLogger('ExcelToPdfConverter')
         logger.setLevel(logging.INFO)
+        logger.propagate = False
         
         # 确保日志目录存在
         os.makedirs(log_dir, exist_ok=True)
         
         # 创建文件处理器
         log_file = os.path.join(log_dir, 'excel_to_pdf.log')
+        log_file_abs = os.path.abspath(log_file)
+        for handler in logger.handlers:
+            if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == log_file_abs:
+                return logger
+
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         

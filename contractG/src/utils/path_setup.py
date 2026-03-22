@@ -11,6 +11,13 @@ import sys
 
 def setup_python_path():
     """设置Python路径，确保所有必要的目录都在sys.path中"""
+    def _prepend_unique(path: str):
+        if not path:
+            return
+        if path in sys.path:
+            sys.path.remove(path)
+        sys.path.insert(0, path)
+
     # 获取当前文件所在目录
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -24,36 +31,27 @@ def setup_python_path():
     project_root = os.path.dirname(src_dir)
     
     # 将项目根目录添加到Python路径
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
+    _prepend_unique(project_root)
     
     # 将src目录添加到Python路径
-    if src_dir not in sys.path:
-        sys.path.insert(0, src_dir)
+    _prepend_unique(src_dir)
     
     # 添加ui目录到Python路径
     ui_dir = os.path.join(src_dir, 'ui')
-    if os.path.exists(ui_dir) and ui_dir not in sys.path:
-        sys.path.insert(0, ui_dir)
+    if os.path.exists(ui_dir):
+        _prepend_unique(ui_dir)
         
     # 为打包后的环境添加特殊处理
     if hasattr(sys, '_MEIPASS'):
         # 将 PyInstaller 的临时目录添加到路径
-        if sys._MEIPASS not in sys.path:
-            sys.path.insert(0, sys._MEIPASS)
+        _prepend_unique(sys._MEIPASS)
             
         # 添加src目录到Python路径
         src_path = os.path.join(sys._MEIPASS, 'src')
-        if os.path.exists(src_path) and src_path not in sys.path:
-            sys.path.insert(0, src_path)
+        if os.path.exists(src_path):
+            _prepend_unique(src_path)
             
         # 添加ui目录到Python路径
         ui_path = os.path.join(sys._MEIPASS, 'src', 'ui')
-        if os.path.exists(ui_path) and ui_path not in sys.path:
-            sys.path.insert(0, ui_path)
-            
-    # 打印路径信息，帮助调试
-    print("Python路径设置完成")
-
-# 在模块导入时自动设置路径
-setup_python_path() 
+        if os.path.exists(ui_path):
+            _prepend_unique(ui_path)

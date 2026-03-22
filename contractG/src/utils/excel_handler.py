@@ -35,7 +35,7 @@ try:
     import win32com.client
     import pythoncom
     WIN32COM_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError):
     WIN32COM_AVAILABLE = False
 
 # 导入PyMuPDF库
@@ -58,17 +58,36 @@ except ImportError:
     PILLOW_AVAILABLE = False
     print("警告: 无法检查Pillow库是否可用。")
 
-# 注册中文字体
-try:
-    # 尝试注册微软雅黑字体（Windows系统常见字体）
-    pdfmetrics.registerFont(TTFont('SimSun', 'C:/Windows/Fonts/simsun.ttc'))
-except:
+font_candidates = []
+if sys.platform == "win32":
+    font_candidates = [
+        "C:/Windows/Fonts/simsun.ttc",
+        "C:/Windows/Fonts/simhei.ttf",
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/msyh.ttf",
+    ]
+elif sys.platform == "darwin":
+    font_candidates = [
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Supplemental/PingFang.ttc",
+        "/System/Library/Fonts/Supplemental/Songti.ttc",
+        "/System/Library/Fonts/Supplemental/STHeiti Light.ttc",
+        "/System/Library/Fonts/Supplemental/STHeiti Medium.ttc",
+    ]
+else:
+    font_candidates = [
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/arphic/uming.ttc",
+    ]
+
+for font_path in font_candidates:
     try:
-        # 尝试注册宋体字体（Windows系统常见字体）
-        pdfmetrics.registerFont(TTFont('SimSun', 'C:/Windows/Fonts/simhei.ttf'))
-    except:
-        # 如果都失败，使用Helvetica（ReportLab默认支持的字体）
-        pass
+        if os.path.exists(font_path):
+            pdfmetrics.registerFont(TTFont("SimSun", font_path))
+            break
+    except Exception:
+        continue
 
 class ExcelHandler:
     """Excel处理工具类"""
@@ -103,6 +122,7 @@ class ExcelHandler:
         """设置日志记录器"""
         logger = logging.getLogger('ExcelHandler')
         logger.setLevel(logging.INFO)
+        logger.propagate = False
         
         # 确保日志目录存在
         log_dir = 'logs'
@@ -110,6 +130,11 @@ class ExcelHandler:
         
         # 创建文件处理器
         log_file = os.path.join(log_dir, 'excel_handler.log')
+        log_file_abs = os.path.abspath(log_file)
+        for handler in logger.handlers:
+            if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == log_file_abs:
+                return logger
+
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         
@@ -256,7 +281,7 @@ class ExcelHandler:
         try:
             if sys.platform == "win32":
                 if not WIN32COM_AVAILABLE:
-                    raise Exception("Windows 下 Excel 转 PDF 需要安装 pywin32 与 Microsoft Excel")
+                    raise Exception("Windows 下 Excel 转 PDF 需要安装 Microsoft Excel 并确保 pywin32 库可用")
 
                 if not hasattr(self, '_excel_app'):
                     pythoncom.CoInitialize()

@@ -17,7 +17,7 @@ DARK_COLOR = "#212121"  # 深色：近黑色
 BORDER_COLOR = "#E0E0E0"  # 边框色：浅灰色
 
 # 字体设置
-FONT_FAMILY = "Microsoft YaHei, Arial, sans-serif"
+FONT_FAMILY = "PingFang SC, Hiragino Sans GB, Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif"
 FONT_SIZE_SMALL = "9pt"
 FONT_SIZE_NORMAL = "10pt"
 FONT_SIZE_LARGE = "12pt"

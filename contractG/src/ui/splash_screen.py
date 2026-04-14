@@ -6,6 +6,7 @@
 """
 
 import os
+import sys
 from PyQt5.QtWidgets import QSplashScreen, QProgressBar, QLabel
 from PyQt5.QtCore import Qt, QTimer, QRect, QPoint, QSize
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QFont, QLinearGradient, QPainterPath, QPen, QRadialGradient, QIcon
@@ -72,19 +73,8 @@ class SplashScreen(QSplashScreen):
     def resource_path(self, relative_path):
         """获取资源文件的绝对路径"""
         try:
-            # 检查是否在打包环境中运行
-            if hasattr(sys, '_MEIPASS'):
-                # 如果是打包环境，使用 _MEIPASS 作为基础路径
-                base_path = sys._MEIPASS
-            else:
-                # 获取当前文件所在目录
-                import sys
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                # 获取项目根目录
-                base_path = os.path.dirname(os.path.dirname(current_dir))
-            
-            # 构建并返回资源文件的完整路径
-            return os.path.join(base_path, 'resources', relative_path)
+            from src.utils.runtime_paths import get_resource_base_dir
+            return str(get_resource_base_dir() / 'resources' / relative_path)
         except Exception:
             return os.path.join('resources', relative_path)
     

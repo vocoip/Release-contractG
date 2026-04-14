@@ -119,8 +119,8 @@ class OptionTab(QWidget):
         option_layout = QHBoxLayout()
         
         self.image_pdf_checkbox = QCheckBox("图片式PDF")
-        self.image_pdf_checkbox.setChecked(True)
-        self.image_pdf_checkbox.setToolTip("将PDF转换为图片格式，提高兼容性")
+        self.image_pdf_checkbox.setChecked(False)
+        self.image_pdf_checkbox.setToolTip("提高兼容性，但通常会增大文件体积")
         self.image_pdf_checkbox.setStyleSheet("""
             QCheckBox {
                 font-size: 10pt;
@@ -283,7 +283,12 @@ class OptionTab(QWidget):
                 
                 # 转换为图片式PDF
                 final_pdf = self.output_pdf_path.replace('.pdf', '_image.pdf')
-                self.converter.convert_pdf_to_image_pdf(self.output_pdf_path, final_pdf)
+                self.converter.convert_pdf_to_image_pdf(
+                    self.output_pdf_path,
+                    final_pdf,
+                    dpi=150,
+                    quality=60,
+                )
                 self.output_pdf_path = final_pdf
                 
                 self.status_label.setText(f"转换成功: {os.path.basename(self.output_pdf_path)}")
@@ -348,7 +353,7 @@ class OptionTab(QWidget):
         self.output_pdf_path = None
         
         # 重置图片式PDF选项
-        self.image_pdf_checkbox.setChecked(True)
+        self.image_pdf_checkbox.setChecked(False)
         
         # 恢复原来的样式
         self.file_info_frame.setStyleSheet("""

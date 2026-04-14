@@ -40,16 +40,20 @@ pip install -r requirements.txt
 python3 src/launcher.py
 ```
 
-如果你在仓库根目录执行命令，也可以直接运行：
-```bash
-CONTRACTG_DEBUG=1 python3 launcher.py
-```
-
 macOS 也可以使用一键启动脚本（双击运行）：
 ```bash
 chmod +x run.command
 ```
 然后在 Finder 里双击 `run.command`。
+
+### macOS（打包成 .app / .dmg）
+
+```bash
+chmod +x scripts/build_macos_dmg.sh
+PYTHON_BIN=python3.12 scripts/build_macos_dmg.sh
+```
+
+产物在 `dist/contractG.app` 与 `dist/contractG.dmg`。
 
 如需使用“Excel 转 PDF”：
 - Windows：依赖本机安装的 Microsoft Excel（通过 COM 导出）

@@ -11,6 +11,7 @@ import sys
 import logging
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 import fitz  # PyMuPDF
 
@@ -333,7 +334,7 @@ class ExcelToPdfConverter:
             self.logger.error(f"向PDF添加图片时出错: {str(e)}")
             raise
     
-    def convert_pdf_to_image_pdf(self, pdf_file, output_pdf=None, dpi=300):
+    def convert_pdf_to_image_pdf(self, pdf_file, output_pdf=None, dpi=150, quality=60):
         """
         将PDF转换为图片式PDF（每页转为图片再嵌入新PDF）
         这样可以确保印章等元素在任何PDF阅读器中都能正确显示
@@ -341,16 +342,20 @@ class ExcelToPdfConverter:
         参数:
             pdf_file (str): PDF文件路径
             output_pdf (str, optional): 输出PDF文件路径，如果为None则使用原文件名加后缀
-            dpi (int): 图片分辨率，默认300
+            dpi (int): 图片分辨率，默认150（降低以减小文件大小）
+            quality (int): 图片压缩质量，范围1-100，默认60（降低以减小文件大小）
             
         返回:
             str: 生成的图片式PDF文件路径
         """
+        is_same_file = False
         if output_pdf is None:
-            # 使用原文件名，但添加_image后缀
             output_pdf = os.path.splitext(pdf_file)[0] + '_image.pdf'
+        elif output_pdf == pdf_file:
+            is_same_file = True
+            output_pdf = os.path.splitext(pdf_file)[0] + '_temp_image.pdf'
         
-        self.logger.info(f"开始将PDF转换为图片式PDF: {pdf_file}")
+        self.logger.info(f"开始将PDF转换为图片式PDF: {os.path.basename(pdf_file)}")
         
         try:
             # 打开PDF文件
@@ -359,25 +364,89 @@ class ExcelToPdfConverter:
             # 创建一个新的PDF文档
             output_document = fitz.open()
             
+            # A4纸张尺寸（点）
+            a4_width = 595
+            a4_height = 842
+
             # 遍历所有页面
             for page_num in range(len(pdf_document)):
                 page = pdf_document[page_num]
                 
-                # 将页面渲染为图片
-                pix = page.get_pixmap(matrix=fitz.Matrix(dpi/72, dpi/72))
+                orig_width = page.rect.width
+                orig_height = page.rect.height
+                render_dpi = max(dpi, 200)
+
+                self.logger.info(
+                    f"处理第{page_num+1}页，尺寸: {orig_width:.1f}x{orig_height:.1f}，DPI: {render_dpi}"
+                )
+
+                pix = page.get_pixmap(matrix=fitz.Matrix(render_dpi/72, render_dpi/72))
+                temp_img_path = os.path.join(tempfile.gettempdir(), f"temp_page_{page_num}.jpg")
+                pix.save(temp_img_path, output="jpeg", jpg_quality=max(quality, 80))
                 
-                # 创建一个新页面，大小与原页面相同
-                new_page = output_document.new_page(width=page.rect.width, height=page.rect.height)
+                new_page = output_document.new_page(width=a4_width, height=a4_height)
                 
-                # 将图片插入到新页面
-                new_page.insert_image(new_page.rect, pixmap=pix)
+                try:
+                    img_doc = fitz.open(temp_img_path)
+                    img_width = img_doc[0].rect.width
+                    img_height = img_doc[0].rect.height
+                    img_doc.close()
+                except Exception as e:
+                    self.logger.info(f"使用PyMuPDF获取图像尺寸失败: {str(e)}，尝试使用Pillow")
+                    try:
+                        from PIL import Image as PILImage
+                        img = PILImage.open(temp_img_path)
+                        img_width, img_height = img.size
+                        img.close()
+                    except ImportError:
+                        self.logger.info("Pillow库未安装，无法获取图像尺寸")
+                        img_width = orig_width * (render_dpi/72)
+                        img_height = orig_height * (render_dpi/72)
+
+                scale_x = a4_width / img_width
+                scale_y = a4_height / img_height
+                scale = min(scale_x, scale_y) * 0.95
+
+                scaled_width = img_width * scale
+                scaled_height = img_height * scale
+                center_x = max(0, (a4_width - scaled_width) / 2)
+                center_y = max(0, (a4_height - scaled_height) / 2)
+
+                target_rect = fitz.Rect(
+                    center_x,
+                    center_y,
+                    center_x + scaled_width,
+                    center_y + scaled_height,
+                )
+                new_page.insert_image(target_rect, filename=temp_img_path)
+
+                try:
+                    os.remove(temp_img_path)
+                except Exception:
+                    pass
             
             # 保存新的PDF文档
             output_document.save(output_pdf)
             output_document.close()
             pdf_document.close()
+
+            if is_same_file:
+                if os.path.exists(pdf_file):
+                    os.remove(pdf_file)
+                os.rename(output_pdf, pdf_file)
+                output_pdf = pdf_file
+
+            file_size_mb = os.path.getsize(output_pdf) / (1024 * 1024)
+            if file_size_mb > 2 and dpi > 120 and quality > 50:
+                self.logger.info(f"文件大小超过2MB ({file_size_mb:.2f}MB)，尝试进一步压缩...")
+                return self.convert_pdf_to_image_pdf(
+                    pdf_file=pdf_file,
+                    output_pdf=output_pdf,
+                    dpi=120,
+                    quality=70,
+                )
             
-            self.logger.info(f"成功将PDF转换为图片式PDF: {output_pdf}")
+            self.logger.info(f"成功将PDF转换为图片式PDF: {os.path.basename(output_pdf)}")
             return output_pdf
             
         except Exception as e:

@@ -149,22 +149,11 @@ except ImportError as e1:
 def resource_path(relative_path):
     """获取资源文件的绝对路径"""
     try:
-        # 检查是否在打包环境中运行
-        if hasattr(sys, '_MEIPASS'):
-            # 如果是打包环境，使用 _MEIPASS 作为基础路径
-            base_path = sys._MEIPASS
-        else:
-            # 获取当前文件所在目录
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            # 获取项目根目录
-            base_path = os.path.dirname(current_dir)
+        from src.utils.runtime_paths import get_resource_base_dir
+        base_path = str(get_resource_base_dir())
         
         # 构建并返回资源文件的完整路径
         full_path = os.path.join(base_path, 'resources', relative_path)
-        
-        # 确保目录存在
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        
         return full_path
     except Exception as e:
         _debug(f"Error in resource_path: {str(e)}")
@@ -173,23 +162,9 @@ def resource_path(relative_path):
 def config_path(relative_path):
     """获取配置文件的绝对路径"""
     try:
-        # 检查是否在打包环境中运行
-        if hasattr(sys, '_MEIPASS'):
-            # 如果是打包环境，使用 _MEIPASS 作为基础路径
-            base_path = sys._MEIPASS
-        else:
-            # 获取当前文件所在目录
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            # 获取项目根目录
-            base_path = os.path.dirname(current_dir)
-        
-        # 构建并返回配置文件的完整路径
-        full_path = os.path.join(base_path, 'config', relative_path)
-        
-        # 确保目录存在
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        
-        return full_path
+        from src.utils.runtime_paths import ensure_writable_layout
+        base_dir = ensure_writable_layout()
+        return str(base_dir / 'config' / relative_path)
     except Exception as e:
         _debug(f"Error in config_path: {str(e)}")
         return relative_path
@@ -201,10 +176,7 @@ def ensure_directories():
         'output',  # 输出目录
         'templates',  # 模板目录
         'logs',  # 日志目录
-        'resources',  # 资源文件目录
         'config',  # 配置文件目录
-        'src/database',  # 数据库目录
-        'src/ui/dialogs',  # UI对话框目录
     ]
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
@@ -256,6 +228,10 @@ def main():
     try:
         # 设置编码
         setup_encoding()
+
+        if hasattr(sys, '_MEIPASS'):
+            from src.utils.runtime_paths import set_working_directory
+            set_working_directory()
         
         # 确保必要的目录存在
         ensure_directories()

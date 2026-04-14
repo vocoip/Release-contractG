@@ -12,11 +12,10 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Font
 
-project_root = str(Path(__file__).parent.parent.parent)
-
 from src.models.customer import Customer
 from src.models.product import Product
 from src.utils.excel_utils import ExcelUtils
+from src.utils.runtime_paths import ensure_writable_layout
 
 class ExcelManager:
     """Excel数据管理器"""
@@ -33,7 +32,8 @@ class ExcelManager:
     
     def __init__(self):
         """初始化Excel管理器"""
-        self.data_dir = Path(project_root) / "data"
+        base_dir = ensure_writable_layout()
+        self.data_dir = base_dir / "data"
         self.data_dir.mkdir(exist_ok=True)
         self.customers_file = self.data_dir / "customers.xlsx"
         self.products_file = self.data_dir / "products.xlsx"

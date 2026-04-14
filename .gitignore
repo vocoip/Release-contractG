@@ -18,6 +18,7 @@ output/
 dist/
 build/
 *.spec
+.pyinstaller-cache/
 
 contractG/_internal/
 contractG/contractG.exe

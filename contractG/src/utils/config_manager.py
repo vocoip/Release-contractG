@@ -6,23 +6,17 @@
 """
 
 import os
-import sys
 import json
 import configparser
 
-# 添加项目根目录到Python路径
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 from src.models.company import Company
+from src.utils.runtime_paths import ensure_writable_layout
 
 class ConfigManager:
     """配置管理类"""
     def __init__(self):
-        # 获取项目根目录
-        current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        
-        # 设置配置目录为项目根目录下的config
-        self.config_dir = os.path.join(current_dir, 'config')
+        base_dir = ensure_writable_layout()
+        self.config_dir = str(base_dir / 'config')
         self.company_file = os.path.join(self.config_dir, 'company.json')
         self.settings_file = os.path.join(self.config_dir, 'settings.ini')
         

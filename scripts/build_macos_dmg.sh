@@ -28,13 +28,18 @@ if [ ! -d ".venv" ]; then
   "$PYTHON_BIN" -m venv .venv
 fi
 
-source .venv/bin/activate
-python -m pip install -U pip
-pip install -r requirements.txt
+VENV_PY="$PWD/.venv/bin/python3"
+if [ ! -x "$VENV_PY" ]; then
+  echo "虚拟环境 Python 不存在: $VENV_PY"
+  exit 1
+fi
+
+"$VENV_PY" -m pip install -U pip
+"$VENV_PY" -m pip install -r requirements.txt
 
 export PYINSTALLER_CONFIG_DIR="$PWD/.pyinstaller-cache"
 
-python - <<'PY'
+"$VENV_PY" - <<'PY'
 import shutil
 from pathlib import Path
 for name in ("build", "dist", ".pyinstaller-cache"):
@@ -43,7 +48,7 @@ for name in ("build", "dist", ".pyinstaller-cache"):
         shutil.rmtree(p)
 PY
 
-pyinstaller \
+"$VENV_PY" -m PyInstaller \
   --noconfirm \
   --clean \
   --windowed \

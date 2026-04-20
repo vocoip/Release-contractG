@@ -290,7 +290,18 @@ class ExcelHandler:
         finally:
             self.output_dir = original_output_dir
 
-        return contract_xlsx, quote_xlsx
+        contract_target = str((templates_dir / "合同模板参考.xlsx").resolve())
+        quote_target = str((templates_dir / "报价单模板参考.xlsx").resolve())
+
+        for src, dst in ((contract_xlsx, contract_target), (quote_xlsx, quote_target)):
+            try:
+                if os.path.exists(dst):
+                    os.remove(dst)
+                os.replace(src, dst)
+            except Exception:
+                pass
+
+        return contract_target, quote_target
 
     def _select_template_path(self, doc_type: str, template_id: str | None):
         if template_id == "builtin":

@@ -789,11 +789,13 @@ class TemplateManagerDialog(QDialog):
 
     def import_template(self):
         doc_type_id, doc_type = self._doc_type()
+        base_dir = ensure_writable_layout()
+        templates_dir = str((base_dir / "templates").resolve())
 
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "选择模板文件",
-            "",
+            templates_dir,
             "Excel 模板 (*.xlsx)",
         )
         if not file_path:

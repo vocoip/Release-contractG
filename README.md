@@ -1,7 +1,7 @@
 # 合同生成工具 (contractG)
 
 ![版本](https://img.shields.io/badge/版本-1.1.0-blue)
-![Python](https://img.shields.io/badge/Python-3.6+-green)
+![Python](https://img.shields.io/badge/Python-3.10%20~%203.12-green)
 ![许可证](https://img.shields.io/badge/许可证-MIT-orange)
 
 > **一分钟生成专业合同和报价单，让销售工作更高效！**
@@ -272,9 +272,12 @@ python src/launcher.py
 5. 设置合同信息：
    - 合同编号（默认格式：SC-YYYYMMDD-XXX）
    - 签订日期
-   - 交货日期
+   - 交货时间（文本）
    - 付款方式
    - 报价单有效期
+6. 选择模板（可选）：
+   - 在顶部“模板”下拉框中按“合同/报价单”分别选择模板
+   - 模板的导入/导出/设默认：在菜单“设置 → 模板管理”
 6. 选择文档选项：
    - 生成合同
    - 生成报价单
@@ -300,7 +303,7 @@ python src/launcher.py
 
 ### 公司信息管理
 
-1. 在"系统"菜单中选择"配置公司信息"
+1. 在菜单“设置”中选择“公司设置”
 2. 在弹出的对话框中可以：
    - 查看现有公司列表
    - 点击"添加公司"按钮新增公司
@@ -323,43 +326,55 @@ python src/launcher.py
 ### 配置文件详解
 
 #### company.json
+公司信息为列表结构（每个元素一家公司）：
 ```json
-{
-  "companies": [
-    {
-      "id": "1",
-      "name": "示例公司名称",
-      "contact": "联系人",
-      "phone": "13800138000",
-      "address": "公司地址",
-      "bank_name": "开户银行",
-      "bank_account": "银行账号",
-      "tax_id": "税号",
-      "stamp_path": "resources/stamp.png",
-      "is_default": true
-    }
-  ]
-}
+[
+  {
+    "name": "示例公司名称",
+    "contact": "联系人",
+    "phone": "13800138000",
+    "address": "公司地址",
+    "bank_name": "开户银行",
+    "bank_account": "银行账号",
+    "tax_id": "税号",
+    "is_default": true
+  }
+]
 ```
 
 #### settings.ini
 ```ini
 [General]
-contract_template = templates/contract_template.xlsx
-quote_template = templates/quote_template.xlsx
 output_dir = output
-data_dir = data
 
-[UI]
-theme = fusion
-font_family = Microsoft YaHei, Arial
-font_size = 10
+[Templates]
+# 多模板列表：显示名::相对路径，多项用 ; 或 , 分隔
+contract_templates = 标准版::templates/contract_standard.xlsx; 外贸版::templates/contract_export.xlsx
+quote_templates = 标准版::templates/quote_standard.xlsx; 外贸版::templates/quote_export.xlsx
+
+# 默认模板（可选，不填则使用列表第一项；也可在“设置 → 模板管理”里设定）
+contract_template_default = 标准版
+quote_template_default = 标准版
 ```
+
+## 📄 模板说明
+
+### 模板管理（导入/导出/删除）
+- 菜单：**设置 → 模板管理**
+- 支持：
+  - 导出“内置默认版式”为 xlsx（合同/报价各一份）
+  - 导入 xlsx 到 `templates/` 并写入 `config/settings.ini`
+  - 设为默认模板
+  - 删除已导入模板（从列表移除；若模板文件未被其他条目引用，会同时删除文件）
+
+### 明细行扩展（多商品）
+- 推荐：在商品明细“模板行”的任意单元格写入 `{{ITEMS_START}}`，同一行其它列用 `{{商品名称}}` / `{{规格型号}}` / `{{单位}}` / `{{数量}}` / `{{单价}}` / `{{金额}}` / `{{备注}}`。
+- 兼容：即使模板未放置 `{{...}}` 占位符，系统也会尝试根据表头（序号/商品名称/规格型号/单位/数量/单价(元)/金额(元)/备注）自动扩展多行。
 
 ## 📁 文件结构
 
 ```
-contractG/
+.
 ├── config/                # 配置文件目录
 │   ├── company.json       # 公司信息配置
 │   └── settings.ini       # 系统设置配置
@@ -372,10 +387,10 @@ contractG/
 │   └── icon.ico           # 应用程序图标
 ├── src/                   # 源代码目录
 ├── templates/             # 模板文件目录
-├── contractG.exe          # 程序可执行文件
 ├── README.md              # 说明文档
 ├── requirements.txt       # 依赖包列表
-└── 启动合同生成工具.bat      # 启动脚本
+├── run.command            # macOS 一键启动脚本
+└── start_contractG.bat    # Windows 启动脚本
 ```
 
 ## 🆘 技术支持

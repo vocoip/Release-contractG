@@ -11,7 +11,7 @@ if [ ! -x "$(command -v "$PYTHON_BIN")" ]; then
 fi
 
 if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] <= (3,12) else 2)'; then
-  echo "Python 版本不受支持: $("$PYTHON_BIN" -c 'import sys; print(f\"{sys.version_info[0]}.{sys.version_info[1]}\")')"
+  echo "Python 版本不受支持: $("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
   echo "请使用 Python 3.10 ~ 3.12（含边界）进行打包。"
   exit 1
 fi

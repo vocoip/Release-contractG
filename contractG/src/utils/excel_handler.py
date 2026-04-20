@@ -1082,11 +1082,18 @@ class ExcelHandler:
             bottom=Side(style='thin')
         )
         
+        row += 1
+        ws.merge_cells(f'A{row}:H{row}')
+        ws[f'A{row}'].value = "注：报价为含税价。"
+        ws[f'A{row}'].font = small_font
+        ws[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[row].height = 20
+        
         # 合同条款
         row += 2
         terms = [
             f"二、付款方式：{contract.payment_method}",
-            f"三、交货时间：{contract.delivery_date}内交货。",
+            f"三、交货时间：{contract.delivery_date}。",
             "四、运输方式：物流（陆运），销货方负责邮费。",
             "五、质保条款：1年保修，维修邮寄费用各自承担。",
             "六、争议解决：甲乙双方协商，协商不成由乙方所在地仲裁机构或法院解决。",
@@ -1547,8 +1554,8 @@ class ExcelHandler:
         quotes = [
             f"1. 本报价单有效期为{contract.quote_valid_days if hasattr(contract, 'quote_valid_days') else 15}天;",
             f"2. 付款方式: {contract.payment_method};",
-            f"3. 预计交货日期: {contract.delivery_date};",
-            "4. 以上价格为含税价格;",
+            f"3. 交货时间: {contract.delivery_date};",
+            "4. 报价为含税价;",
             "5. 运输方式及费用由乙方承担;",
             "6. 如有其他特殊要求, 请与我们联系。"
         ]

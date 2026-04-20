@@ -448,11 +448,10 @@ class ContractTab(QWidget):
         self.sign_date.setMinimumHeight(24)  # 减少高度
         info_grid.addWidget(self.sign_date, 0, 3)
         
-        # 第二行：交货日期和付款方式
-        info_grid.addWidget(QLabel("交货日期:"), 1, 0, Qt.AlignRight)
-        self.delivery_date = QDateEdit()
-        self.delivery_date.setCalendarPopup(True)
-        self.delivery_date.setDate(QDate.currentDate().addDays(7))
+        # 第二行：交货时间和付款方式
+        info_grid.addWidget(QLabel("交货时间:"), 1, 0, Qt.AlignRight)
+        self.delivery_date = QLineEdit()
+        self.delivery_date.setText("款到14天内")
         self.delivery_date.setMinimumHeight(24)  # 减少高度
         info_grid.addWidget(self.delivery_date, 1, 1)
         
@@ -1141,7 +1140,7 @@ class ContractTab(QWidget):
         
         # 重置日期为当前日期
         self.sign_date.setDate(QDate.currentDate())
-        self.delivery_date.setDate(QDate.currentDate().addDays(7))
+        self.delivery_date.setText("款到14天内")
         
         # 重置付款方式为默认值
         self.payment_method.setCurrentIndex(0)
@@ -1178,7 +1177,7 @@ class ContractTab(QWidget):
         # 获取合同信息
         contract_number = self.contract_number.text()
         sign_date = self.sign_date.date().toString("yyyy年MM月dd日")
-        delivery_date = self.delivery_date.date().toString("yyyy年MM月dd日")
+        delivery_date = self.delivery_date.text().strip() or "款到14天内"
         payment_method = self.payment_method.currentText()
         remarks = ""  # 使用空字符串替代
         quote_valid_days = self.quote_valid_days.value()

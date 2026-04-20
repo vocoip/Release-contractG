@@ -20,5 +20,5 @@ build/
 *.spec
 .pyinstaller-cache/
 
-contractG/_internal/
-contractG/contractG.exe
+_internal/
+contractG.exe

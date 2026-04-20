@@ -27,12 +27,20 @@ from src.ui.product_tab import ProductTab
 from src.ui.contract_tab import ContractTab
 from src.ui.option_tab import OptionTab
 from src.utils.config_manager import ConfigManager
+from src.utils.runtime_paths import get_resource_base_dir
 from src.models.company import Company
 from src.ui.styles import (
     PRIMARY_COLOR, SECONDARY_COLOR, SUCCESS_COLOR, 
     WARNING_COLOR, DANGER_COLOR, LIGHT_COLOR,
     HEADING_STYLE, SUBHEADING_STYLE, CARD_STYLE
 )
+
+def _resource_path(*parts: str) -> str:
+    return os.path.join(str(get_resource_base_dir()), "resources", *parts)
+
+
+def _icon_path(filename: str) -> str:
+    return _resource_path("icons", filename)
 
 class CompanyInfoDialog(QDialog):
     """公司信息配置对话框"""
@@ -138,22 +146,22 @@ class CompanyInfoDialog(QDialog):
         button_layout.setSpacing(10)  # 增加按钮间距
         
         self.add_button = QPushButton("添加公司")
-        self.add_button.setIcon(QIcon("resources/icons/add.png"))
+        self.add_button.setIcon(QIcon(_icon_path("add.png")))
         self.add_button.clicked.connect(self.clear_form)
         button_layout.addWidget(self.add_button)
         
         self.edit_button = QPushButton("编辑公司")
-        self.edit_button.setIcon(QIcon("resources/icons/edit.png"))
+        self.edit_button.setIcon(QIcon(_icon_path("edit.png")))
         self.edit_button.clicked.connect(self.edit_company)
         button_layout.addWidget(self.edit_button)
         
         self.delete_button = QPushButton("删除公司")
-        self.delete_button.setIcon(QIcon("resources/icons/delete.png"))
+        self.delete_button.setIcon(QIcon(_icon_path("delete.png")))
         self.delete_button.clicked.connect(self.delete_company)
         button_layout.addWidget(self.delete_button)
         
         self.default_button = QPushButton("设为默认")
-        self.default_button.setIcon(QIcon("resources/icons/star.png"))
+        self.default_button.setIcon(QIcon(_icon_path("star.png")))
         self.default_button.clicked.connect(self.set_default_company)
         button_layout.addWidget(self.default_button)
         
@@ -473,18 +481,15 @@ class CompanyInfoDialog(QDialog):
         if not text:
             QMessageBox.warning(self, "警告", "请输入要解析的文本！")
             return
-        
-        # 检查是否达到最大数量限制
-        companies = self.config_manager.get_companies()
-        if len(companies) >= 2:
-            QMessageBox.warning(self, "警告", "已达到最大公司数量限制（2个）！")
-            return
-        
+
         # 解析公司信息
         company_data = self.config_manager.parse_company_info(text)
         if company_data:
-            # 检查公司名称是否已存在
-            if any(c.name == company_data['name'] for c in companies):
+            companies = self.config_manager.get_companies()
+            existing_company = next((c for c in companies if c.name == company_data['name']), None)
+
+            # 公司已存在：走更新流程
+            if existing_company is not None:
                 reply = QMessageBox.question(
                     self,
                     "公司已存在",
@@ -494,24 +499,40 @@ class CompanyInfoDialog(QDialog):
                 )
                 if reply == QMessageBox.No:
                     return
-            
-            # 创建新公司对象
-            new_company = Company(**company_data)
-            
-            # 如果是第一个公司，设置为默认
-            if not companies:
-                new_company.is_default = True
-            
-            # 添加到公司列表
-            companies.append(new_company)
+
+                # 仅覆盖解析到的非空字段，保留原默认状态和原印章
+                for field in ("contact", "phone", "address", "bank_name", "bank_account", "tax_id"):
+                    value = company_data.get(field, "")
+                    if value:
+                        setattr(existing_company, field, value)
+                existing_company.name = company_data.get("name", existing_company.name) or existing_company.name
+                save_ok = self.config_manager.save_companies(companies)
+                success_message = "公司信息已成功更新！"
+            else:
+                # 新增公司前检查数量限制
+                if len(companies) >= 2:
+                    QMessageBox.warning(self, "警告", "已达到最大公司数量限制（2个）！")
+                    return
+
+                # 创建新公司对象
+                new_company = Company(**company_data)
+
+                # 如果是第一个公司，设置为默认
+                if not companies:
+                    new_company.is_default = True
+
+                # 添加到公司列表
+                companies.append(new_company)
+                save_ok = self.config_manager.save_companies(companies)
+                success_message = "公司信息已成功添加！"
             
             # 保存到配置文件
-            if self.config_manager.save_companies(companies):
+            if save_ok:
                 # 更新界面显示
                 self.load_companies()
                 # 清空文本输入框
                 self.text_import.clear()
-                QMessageBox.information(self, "成功", "公司信息已成功添加！")
+                QMessageBox.information(self, "成功", success_message)
             else:
                 QMessageBox.warning(self, "错误", "保存公司信息失败！")
         else:
@@ -564,7 +585,7 @@ class CompanyInfoDialog(QDialog):
         self.seal_combo.addItem("无印章", "")
         
         # 获取印章目录中的所有图片
-        seal_dir = os.path.join("resources", "seals")
+        seal_dir = _resource_path("seals")
         if os.path.exists(seal_dir):
             for file in os.listdir(seal_dir):
                 if file.lower().endswith(('.png', '.jpg', '.jpeg')):
@@ -578,7 +599,7 @@ class CompanyInfoDialog(QDialog):
         """更新印章预览"""
         seal_file = self.seal_combo.currentData()
         if seal_file:
-            seal_path = os.path.join("resources", "seals", seal_file)
+            seal_path = _resource_path("seals", seal_file)
             if os.path.exists(seal_path):
                 pixmap = QPixmap(seal_path)
                 self.seal_preview.setPixmap(pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -598,7 +619,7 @@ class CompanyInfoDialog(QDialog):
         
         if file_path:
             # 确保印章目录存在
-            seal_dir = os.path.join("resources", "seals")
+            seal_dir = _resource_path("seals")
             os.makedirs(seal_dir, exist_ok=True)
             
             # 使用税号作为文件名（如果有），否则使用时间戳
@@ -869,10 +890,10 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.option_tab, "Excel 转 PDF")  # 新增选项页
         
         # 设置标签页图标
-        self.tab_widget.setTabIcon(0, QIcon("src/resources/icons/contract.png"))
-        self.tab_widget.setTabIcon(1, QIcon("src/resources/icons/customer.png"))
-        self.tab_widget.setTabIcon(2, QIcon("src/resources/icons/product.png"))
-        self.tab_widget.setTabIcon(3, QIcon("src/resources/icons/option.png"))
+        self.tab_widget.setTabIcon(0, QIcon(_icon_path("contract.png")))
+        self.tab_widget.setTabIcon(1, QIcon(_icon_path("customer.png")))
+        self.tab_widget.setTabIcon(2, QIcon(_icon_path("product.png")))
+        self.tab_widget.setTabIcon(3, QIcon(_icon_path("option.png")))
         
         # 创建中央部件
         central_widget = QWidget()

@@ -7,36 +7,32 @@
 
 import os
 import datetime
-import sys
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
     QTableWidget, QTableWidgetItem, QLineEdit, 
     QLabel, QComboBox, QDateEdit, QSpinBox,
     QDoubleSpinBox, QMessageBox, QGroupBox,
-    QFormLayout, QTextEdit, QCheckBox, QHeaderView,
-    QSplitter, QSizePolicy, QFrame, QDialog, QPlainTextEdit,
-    QFileDialog, QButtonGroup, QRadioButton, QGridLayout
+    QFormLayout, QCheckBox, QSplitter, QSizePolicy, QFrame,
+    QDialog, QButtonGroup, QRadioButton, QGridLayout
 )
-from PyQt5.QtCore import Qt, QDate, QSize, QTimer, QSettings, QUrl
-from PyQt5.QtGui import QIcon, QFont, QColor, QDesktopServices
-from pypinyin import lazy_pinyin, Style
-from pathlib import Path
-from PyQt5.QtWidgets import QApplication, QStyle
+from PyQt5.QtCore import Qt, QDate, QSettings, QUrl
+from PyQt5.QtGui import QIcon, QDesktopServices
+from pypinyin import lazy_pinyin
 
 # 注意：路径设置已由path_setup模块处理，不需要在这里重复设置
 
 from src.database.excel_manager import ExcelManager
 from src.utils.config_manager import ConfigManager
-from src.utils.excel_handler import ExcelHandler
+from src.utils.runtime_paths import get_resource_base_dir
+from src.services.document_service import DocumentService
 from src.models.contract import Contract, ContractItem
-from src.models.company import Company
 from src.ui.dialogs.customer_dialog import CustomerDialog
-from src.utils.text_parser import TextParser
 from src.ui.styles import (
-    PRIMARY_COLOR, SECONDARY_COLOR, SUCCESS_COLOR, 
-    WARNING_COLOR, DANGER_COLOR, LIGHT_COLOR,
-    HEADING_STYLE, SUBHEADING_STYLE
+    SUCCESS_COLOR, HEADING_STYLE
 )
+
+def _icon_path(filename: str) -> str:
+    return os.path.join(str(get_resource_base_dir()), "resources", "icons", filename)
 
 class ContractTab(QWidget):
     """合同生成标签页"""
@@ -46,7 +42,7 @@ class ContractTab(QWidget):
         self.product_tab = product_tab
         self.excel_manager = ExcelManager()
         self.config_manager = ConfigManager()
-        self.excel_handler = ExcelHandler()
+        self.document_service = DocumentService()
         
         # 创建QSettings对象，用于保存和恢复用户选择
         self.settings = QSettings("contractG", "ContractGenerator")
@@ -273,7 +269,7 @@ class ContractTab(QWidget):
         
         # 添加到合同按钮
         add_btn = QPushButton("添加到合同")
-        add_btn.setIcon(QIcon("src/resources/icons/add.png"))
+        add_btn.setIcon(QIcon(_icon_path("add.png")))
         add_btn.clicked.connect(self.add_to_contract)
         add_btn.setStyleSheet(f"""
             QPushButton {{
@@ -399,7 +395,7 @@ class ContractTab(QWidget):
         
         # 生成按钮
         self.generate_btn = QPushButton("生成文档")
-        self.generate_btn.setIcon(QIcon("src/resources/icons/contract.png"))
+        self.generate_btn.setIcon(QIcon(_icon_path("contract.png")))
         self.generate_btn.clicked.connect(self.generate_contract)
         self.generate_btn.setStyleSheet("""
             QPushButton {
@@ -559,21 +555,21 @@ class ContractTab(QWidget):
         
         # 商品操作按钮
         edit_item_btn = QPushButton("编辑")
-        edit_item_btn.setIcon(QIcon("src/resources/icons/edit.png"))
+        edit_item_btn.setIcon(QIcon(_icon_path("edit.png")))
         edit_item_btn.clicked.connect(self.edit_contract_item)
         edit_item_btn.setMinimumHeight(24)  # 减少高度
         edit_item_btn.setMaximumWidth(70)  # 减少宽度
         items_header.addWidget(edit_item_btn)
         
         remove_item_btn = QPushButton("移除")
-        remove_item_btn.setIcon(QIcon("src/resources/icons/delete.png"))
+        remove_item_btn.setIcon(QIcon(_icon_path("delete.png")))
         remove_item_btn.clicked.connect(self.remove_contract_item)
         remove_item_btn.setMinimumHeight(24)  # 减少高度
         remove_item_btn.setMaximumWidth(70)  # 减少宽度
         items_header.addWidget(remove_item_btn)
         
         clear_items_btn = QPushButton("清空")
-        clear_items_btn.setIcon(QIcon("src/resources/icons/clear.png"))
+        clear_items_btn.setIcon(QIcon(_icon_path("delete.png")))
         clear_items_btn.clicked.connect(self.clear_contract_items)
         clear_items_btn.setMinimumHeight(24)  # 减少高度
         clear_items_btn.setMaximumWidth(70)  # 减少宽度
@@ -615,6 +611,7 @@ class ContractTab(QWidget):
                 min-height: 18px;  /* 减少最小高度 */
             }
         """)
+        self.contract_items_table.itemChanged.connect(self.update_item_amount)
         
         items_layout.addWidget(self.contract_items_table)
         
@@ -814,11 +811,21 @@ class ContractTab(QWidget):
         
         self.contract_items_table.setItem(row, 5, amount_item)
         
-        # 连接数量和单价变化信号
-        self.contract_items_table.itemChanged.connect(self.update_item_amount)
-        
         # 计算总金额
         self.calculate_total()
+
+    def _reset_item_cell_value(self, row, column, value):
+        """在不触发 itemChanged 的前提下重置单元格值"""
+        self.contract_items_table.blockSignals(True)
+        try:
+            target_item = self.contract_items_table.item(row, column)
+            if target_item is None:
+                target_item = QTableWidgetItem(value)
+                self.contract_items_table.setItem(row, column, target_item)
+            else:
+                target_item.setText(value)
+        finally:
+            self.contract_items_table.blockSignals(False)
     
     def update_item_amount(self, item):
         """更新商品金额"""
@@ -860,18 +867,39 @@ class ContractTab(QWidget):
                 error_msg = str(e) if "必须大于0" in str(e) else "请输入有效的数值！"
                 QMessageBox.warning(self, "警告", error_msg)
                 if item.column() == 3:  # 单价列
-                    # 恢复原始单价
-                    original_price = self.product_table.item(self.product_table.currentRow(), 3).text()
-                    item.setText(original_price)
+                    amount_item = self.contract_items_table.item(row, 5)
+                    quantity_item = self.contract_items_table.item(row, 4)
+                    fallback_price = "1.00"
+                    try:
+                        if amount_item and quantity_item:
+                            amount = float(amount_item.text())
+                            quantity = int(quantity_item.text())
+                            if quantity > 0:
+                                fallback_price = f"{max(amount / quantity, 0.01):.2f}"
+                    except (ValueError, TypeError):
+                        pass
+                    self._reset_item_cell_value(row, 3, fallback_price)
                 else:  # 数量列
-                    item.setText("1")
+                    amount_item = self.contract_items_table.item(row, 5)
+                    price_item = self.contract_items_table.item(row, 3)
+                    fallback_quantity = "1"
+                    try:
+                        if amount_item and price_item:
+                            amount = float(amount_item.text())
+                            price = float(price_item.text())
+                            if price > 0:
+                                fallback_quantity = str(max(int(round(amount / price)), 1))
+                    except (ValueError, TypeError):
+                        pass
+                    self._reset_item_cell_value(row, 4, fallback_quantity)
+                self.calculate_total()
             except Exception as e:
                 QMessageBox.warning(self, "警告", f"更新金额时出错: {str(e)}")
                 if item.column() == 3:
-                    original_price = self.product_table.item(self.product_table.currentRow(), 3).text()
-                    item.setText(original_price)
+                    self._reset_item_cell_value(row, 3, "1.00")
                 else:
-                    item.setText("1")
+                    self._reset_item_cell_value(row, 4, "1")
+                self.calculate_total()
     
     def remove_contract_item(self):
         """从合同中移除商品"""
@@ -880,14 +908,12 @@ class ContractTab(QWidget):
             QMessageBox.warning(self, "警告", "请先选择一个商品！")
             return
         
-        # 断开信号连接，防止删除过程中触发itemChanged
-        self.contract_items_table.itemChanged.disconnect(self.update_item_amount)
-        
         row = selected_rows[0].row()
-        self.contract_items_table.removeRow(row)
-        
-        # 重新连接信号
-        self.contract_items_table.itemChanged.connect(self.update_item_amount)
+        self.contract_items_table.blockSignals(True)
+        try:
+            self.contract_items_table.removeRow(row)
+        finally:
+            self.contract_items_table.blockSignals(False)
         
         # 重新计算总金额
         self.calculate_total()
@@ -998,36 +1024,29 @@ class ContractTab(QWidget):
         
         # 显示对话框
         if dialog.exec_() == QDialog.Accepted:
-            # 断开信号连接，防止更新过程中触发itemChanged
-            self.contract_items_table.itemChanged.disconnect(self.update_item_amount)
-            
             # 更新单价和数量
             new_price = price_spin.value()
             new_quantity = quantity_spin.value()
             new_amount = new_price * new_quantity
-            
-            self.contract_items_table.item(row, 3).setText(f"{new_price:.2f}")
-            self.contract_items_table.item(row, 4).setText(str(new_quantity))
-            self.contract_items_table.item(row, 5).setText(f"{new_amount:.2f}")
-            
-            # 重新连接信号
-            self.contract_items_table.itemChanged.connect(self.update_item_amount)
+
+            self.contract_items_table.blockSignals(True)
+            try:
+                self.contract_items_table.item(row, 3).setText(f"{new_price:.2f}")
+                self.contract_items_table.item(row, 4).setText(str(new_quantity))
+                self.contract_items_table.item(row, 5).setText(f"{new_amount:.2f}")
+            finally:
+                self.contract_items_table.blockSignals(False)
             
             # 重新计算总金额
             self.calculate_total()
     
     def clear_contract_items(self):
         """清空合同商品列表"""
-        # 检查信号是否已连接，如果已连接则断开
+        self.contract_items_table.blockSignals(True)
         try:
-            self.contract_items_table.itemChanged.disconnect(self.update_item_amount)
-        except TypeError:
-            pass  # 信号未连接，忽略错误
-        
-        self.contract_items_table.setRowCount(0)
-        
-        # 重新连接信号
-        self.contract_items_table.itemChanged.connect(self.update_item_amount)
+            self.contract_items_table.setRowCount(0)
+        finally:
+            self.contract_items_table.blockSignals(False)
         
         # 重新计算总金额
         self.calculate_total()
@@ -1224,10 +1243,7 @@ class ContractTab(QWidget):
         self.save_settings()
         
         try:
-            if doc_type_id == 0:  # 合同
-                self.excel_handler.generate_contract_only(contract)
-            else:  # 报价单
-                self.excel_handler.generate_quote_only(contract)
+            self.document_service.generate_document(contract, doc_type_id)
             
             # 更新合同编号（自增）
             self.increment_contract_number()
@@ -1244,7 +1260,7 @@ class ContractTab(QWidget):
     def open_contracts_folder(self):
         """打开合同文件夹"""
         try:
-            folder_path = self.excel_handler.get_contracts_folder()
+            folder_path = self.document_service.get_output_folder()
 
             if not QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path)):
                 QMessageBox.warning(self, "警告", "无法自动打开文件夹，请手动打开。")
@@ -1298,7 +1314,7 @@ class ContractTab(QWidget):
         self.min_service_fee.setEnabled(enabled)
         self.calculate_total()
 
-    def update_generate_button_text(self, button=None):
+    def update_generate_button_text(self, _button=None):
         """根据选择的文档类型更新生成按钮的文本"""
         doc_type = self.doc_type_group.checkedId()
         if doc_type == 0:
@@ -1447,20 +1463,18 @@ class ContractTab(QWidget):
         
         # 显示对话框
         if dialog.exec_() == QDialog.Accepted:
-            # 断开信号连接，防止更新过程中触发itemChanged
-            self.contract_items_table.itemChanged.disconnect(self.update_item_amount)
-            
             # 更新单价和数量
             new_price = price_spin.value()
             new_quantity = quantity_spin.value()
             new_amount = new_price * new_quantity
-            
-            self.contract_items_table.item(row, 3).setText(f"{new_price:.2f}")
-            self.contract_items_table.item(row, 4).setText(str(new_quantity))
-            self.contract_items_table.item(row, 5).setText(f"{new_amount:.2f}")
-            
-            # 重新连接信号
-            self.contract_items_table.itemChanged.connect(self.update_item_amount)
+
+            self.contract_items_table.blockSignals(True)
+            try:
+                self.contract_items_table.item(row, 3).setText(f"{new_price:.2f}")
+                self.contract_items_table.item(row, 4).setText(str(new_quantity))
+                self.contract_items_table.item(row, 5).setText(f"{new_amount:.2f}")
+            finally:
+                self.contract_items_table.blockSignals(False)
             
             # 重新计算总金额
             self.calculate_total() 

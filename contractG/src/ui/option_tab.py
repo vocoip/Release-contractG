@@ -1,22 +1,22 @@
 import os
-import threading
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, 
-    QProgressBar, QHBoxLayout, QFrame, QGroupBox, QSplitter, 
-    QSpacerItem, QSizePolicy, QApplication, QCheckBox
+    QWidget, QVBoxLayout, QPushButton, QLabel,
+    QProgressBar, QHBoxLayout, QFrame, QGroupBox, QApplication, QCheckBox
 )
-from PyQt5.QtCore import Qt, QMimeData, QTimer, QThread, pyqtSignal, QUrl
-from PyQt5.QtGui import QIcon, QFont, QPixmap, QDesktopServices
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from src.utils.excel_to_pdf import ExcelToPdfConverter
-from src.ui.styles import CARD_STYLE, PRIMARY_COLOR, SECONDARY_COLOR, SUCCESS_COLOR
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QUrl
+from PyQt5.QtGui import QIcon, QPixmap, QDesktopServices
+from src.services.document_service import DocumentService
+from src.utils.runtime_paths import get_resource_base_dir
+from src.ui.styles import CARD_STYLE
+
+def _icon_path(filename: str) -> str:
+    return os.path.join(str(get_resource_base_dir()), "resources", "icons", filename)
 
 class OptionTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setup_ui()
-        self.converter = ExcelToPdfConverter()
+        self.document_service = DocumentService()
         self.output_pdf_path = None
         self.conversion_thread = None
         
@@ -86,7 +86,7 @@ class OptionTab(QWidget):
         self.file_icon_label = QLabel()
         self.file_icon_label.setAlignment(Qt.AlignCenter)
         # 设置默认图标
-        default_icon = QPixmap("resources/icons/excel.png")
+        default_icon = QPixmap(_icon_path("option.png"))
         if default_icon.isNull():
             # 如果图标不存在，使用文本替代
             self.file_icon_label.setText("📄")
@@ -173,7 +173,7 @@ class OptionTab(QWidget):
         action_layout = QHBoxLayout()
         
         self.open_pdf_button = QPushButton("打开PDF")
-        self.open_pdf_button.setIcon(QIcon("resources/icons/pdf.png"))
+        self.open_pdf_button.setIcon(QIcon(_icon_path("contract.png")))
         self.open_pdf_button.setToolTip("打开转换后的PDF文件")
         self.open_pdf_button.clicked.connect(self.open_pdf)
         self.open_pdf_button.setMinimumHeight(40)
@@ -197,7 +197,7 @@ class OptionTab(QWidget):
         """)
         
         self.reset_button = QPushButton("重新选择")
-        self.reset_button.setIcon(QIcon("resources/icons/reset.png"))
+        self.reset_button.setIcon(QIcon(_icon_path("delete.png")))
         self.reset_button.setToolTip("清除当前选择的文件，重新选择")
         self.reset_button.clicked.connect(self.reset_ui)
         self.reset_button.setMinimumHeight(40)
@@ -233,11 +233,12 @@ class OptionTab(QWidget):
         conversion_finished = pyqtSignal(str)
         conversion_failed = pyqtSignal(str)
 
-        def __init__(self, converter, file_path, output_path):
+        def __init__(self, document_service, file_path, output_path, image_pdf=False):
             super().__init__()
-            self.converter = converter
+            self.document_service = document_service
             self.file_path = file_path
             self.output_path = output_path
+            self.image_pdf = image_pdf
 
         def run(self):
             try:
@@ -245,12 +246,15 @@ class OptionTab(QWidget):
                 def progress_callback(value):
                     self.progress_updated.emit(value)
 
-                self.converter.convert_to_pdf(
+                final_output = self.document_service.convert_excel_to_pdf(
                     excel_file=self.file_path, 
                     pdf_file=self.output_path,
-                    progress_callback=progress_callback
+                    progress_callback=progress_callback,
+                    as_image_pdf=self.image_pdf,
+                    dpi=150,
+                    quality=60,
                 )
-                self.conversion_finished.emit(self.output_path)
+                self.conversion_finished.emit(final_output)
             except Exception as e:
                 self.conversion_failed.emit(str(e))
 
@@ -275,31 +279,7 @@ class OptionTab(QWidget):
             padding: 10px;
         """)
         
-        # 如果勾选了图片式PDF选项，则将PDF转换为图片式PDF
-        if self.image_pdf_checkbox.isChecked():
-            try:
-                self.status_label.setText("正在转换为图片式PDF...")
-                QApplication.processEvents()
-                
-                # 转换为图片式PDF
-                final_pdf = self.output_pdf_path.replace('.pdf', '_image.pdf')
-                self.converter.convert_pdf_to_image_pdf(
-                    self.output_pdf_path,
-                    final_pdf,
-                    dpi=150,
-                    quality=60,
-                )
-                self.output_pdf_path = final_pdf
-                
-                self.status_label.setText(f"转换成功: {os.path.basename(self.output_pdf_path)}")
-            except Exception as e:
-                self.status_label.setText(f"图片式PDF转换失败: {str(e)}")
-                self.file_info_frame.setStyleSheet("""
-                    background-color: #ffebee;
-                    border: 1px solid #f44336;
-                    border-radius: 5px;
-                    padding: 10px;
-                """)
+        self.status_label.setText(f"转换成功: {os.path.basename(self.output_pdf_path)}")
 
     def handle_conversion_failed(self, error_msg):
         """处理转换失败"""
@@ -332,7 +312,12 @@ class OptionTab(QWidget):
             self.reset_button.setEnabled(False)
             
             # 创建并启动转换线程
-            self.conversion_thread = self.ConversionThread(self.converter, file_path, output_path)
+            self.conversion_thread = self.ConversionThread(
+                self.document_service,
+                file_path,
+                output_path,
+                image_pdf=self.image_pdf_checkbox.isChecked(),
+            )
             self.conversion_thread.progress_updated.connect(self.handle_progress_update)
             self.conversion_thread.conversion_finished.connect(self.handle_conversion_finished)
             self.conversion_thread.conversion_failed.connect(self.handle_conversion_failed)

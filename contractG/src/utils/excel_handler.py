@@ -101,6 +101,42 @@ class ExcelHandler:
         
         # 初始化回调函数
         self.log_callback = None
+
+    def _safe_name_part(self, text, max_len=6):
+        if text is None:
+            text = ""
+        text = str(text).strip()
+        text = "".join(text.split())
+        invalid = '<>:"/\\|?*\0'
+        text = text.translate({ord(ch): "_" for ch in invalid})
+        text = text.strip("._- ")
+        if not text:
+            text = "未知"
+        return text[:max_len]
+
+    def _get_company_name(self, company):
+        if company is None:
+            return ""
+        if isinstance(company, dict):
+            return company.get("name", "")
+        return getattr(company, "name", "")
+
+    def _format_yyyymmdd(self, date_value):
+        if hasattr(date_value, "strftime"):
+            try:
+                return date_value.strftime("%Y%m%d")
+            except Exception:
+                pass
+        digits = "".join(ch for ch in str(date_value or "") if ch.isdigit())
+        if len(digits) >= 8:
+            return digits[:8]
+        return datetime.datetime.now().strftime("%Y%m%d")
+
+    def _build_output_basename(self, contract):
+        party_a = self._safe_name_part(getattr(contract.customer, "name", ""))
+        party_b = self._safe_name_part(self._get_company_name(getattr(contract, "company", None)))
+        sign_date = self._format_yyyymmdd(getattr(contract, "sign_date", None))
+        return f"{party_a}_{party_b}_{sign_date}"
     
     def set_log_callback(self, callback):
         """设置日志回调函数，用于将日志信息传递给UI"""
@@ -1150,7 +1186,7 @@ class ExcelHandler:
         
         # 保存文件
         draft_suffix = "_草稿" if contract.is_draft else ""
-        filename = f"{contract_number}{draft_suffix}.xlsx"
+        filename = f"{self._build_output_basename(contract)}_合同{draft_suffix}.xlsx"
         filepath = os.path.join(self.output_dir, filename)
         wb.save(filepath)
         
@@ -1540,7 +1576,8 @@ class ExcelHandler:
         ws[f'A{row}'].border = Border()
         
         # 保存文件
-        filename = f"报价单-{contract.number}{contract.random_suffix}.xlsx"
+        draft_suffix = "_草稿" if contract.is_draft else ""
+        filename = f"{self._build_output_basename(contract)}_报价单{draft_suffix}.xlsx"
         filepath = os.path.join(self.output_dir, filename)
         wb.save(filepath)
         

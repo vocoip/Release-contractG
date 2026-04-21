@@ -39,14 +39,7 @@ fi
 
 export PYINSTALLER_CONFIG_DIR="$PWD/.pyinstaller-cache"
 
-"$VENV_PY" - <<'PY'
-import shutil
-from pathlib import Path
-for name in ("build", "dist", ".pyinstaller-cache"):
-    p = Path(name)
-    if p.exists():
-        shutil.rmtree(p)
-PY
+rm -rf build dist .pyinstaller-cache || true
 
 "$VENV_PY" -m PyInstaller \
   --noconfirm \

@@ -229,6 +229,9 @@ def main():
         # 设置编码
         setup_encoding()
 
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
         if hasattr(sys, '_MEIPASS'):
             from src.utils.runtime_paths import set_working_directory
             set_working_directory()
@@ -238,12 +241,25 @@ def main():
         
         # 创建QApplication实例
         app = QApplication(sys.argv)
+
+        screen = app.primaryScreen()
+        width = screen.availableGeometry().width() if screen else 0
+        if sys.platform == "darwin":
+            base_font_pt = 11
+        else:
+            if width >= 2800:
+                base_font_pt = 11
+            elif width >= 2200:
+                base_font_pt = 10
+            else:
+                base_font_pt = 9
+        app.setProperty("baseFontPt", base_font_pt)
         
         # 设置全局样式
         app.setStyleSheet(GLOBAL_STYLE)
         
         # 设置全局字体
-        font = QFont(FONT_FAMILY, 9)
+        font = QFont(FONT_FAMILY, base_font_pt)
         app.setFont(font)
         
         # 设置应用程序图标

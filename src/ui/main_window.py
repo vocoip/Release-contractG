@@ -937,9 +937,15 @@ class MainWindow(QMainWindow):
         # 设置窗口基本属性
         self.setWindowTitle("contractG")
         self.setMinimumSize(1200, 800)
+
+        app = QApplication.instance()
+        try:
+            base_font_pt = int(app.property("baseFontPt")) if app and app.property("baseFontPt") else 9
+        except Exception:
+            base_font_pt = 9
         
         # 设置应用样式
-        self.setStyleSheet("""
+        style_sheet = """
             QMainWindow, QTabWidget, QWidget {
                 background-color: #f5f5f5;
                 font-family: 'Microsoft YaHei', 'SimHei', sans-serif;
@@ -1129,7 +1135,9 @@ class MainWindow(QMainWindow):
             QStatusBar {
                 color: #666666;
             }
-        """)
+        """
+        style_sheet = style_sheet.replace("font-size: 9pt;", f"font-size: {base_font_pt}pt;")
+        self.setStyleSheet(style_sheet)
         
         # 创建工具栏
         self.toolbar = QToolBar("主工具栏")

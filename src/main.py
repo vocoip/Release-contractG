@@ -272,17 +272,17 @@ def main():
         # 显示启动画面
         splash = SplashScreen()
         splash.show()
+        app.processEvents()
         
-        # 创建主窗口但不显示
-        main_window = MainWindow()
-        
-        # 在启动画面完成后显示主窗口
-        def finish_splash():
+        main_window_holder = {}
+
+        def create_and_show_main_window():
+            main_window = MainWindow()
+            main_window_holder["window"] = main_window
             splash.finish(main_window)
             main_window.show()
-        
-        # 设置定时器在3秒后关闭启动画面并显示主窗口
-        QTimer.singleShot(3000, finish_splash)
+
+        QTimer.singleShot(0, create_and_show_main_window)
         
         # 运行应用程序
         sys.exit(app.exec_())

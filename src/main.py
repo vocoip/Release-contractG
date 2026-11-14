@@ -11,9 +11,6 @@ import sys
 import locale
 import traceback
 from datetime import datetime
-from openpyxl import load_workbook
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
@@ -180,48 +177,6 @@ def ensure_directories():
     ]
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
-
-def excel_to_pdf(excel_file, pdf_file):
-    # 读取 Excel 文件
-    wb = load_workbook(excel_file)
-    ws = wb.active
-    
-    # 创建 PDF 文件
-    c = canvas.Canvas(pdf_file, pagesize=A4)
-    width, height = A4
-
-    # 设置初始位置
-    x_offset = 50
-    y_offset = height - 50
-    line_height = 20
-
-    # 写入标题
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(x_offset, y_offset, "Excel to PDF Conversion")
-    y_offset -= line_height
-
-    # 写入列名
-    c.setFont("Helvetica-Bold", 10)
-    for col in ws.iter_cols(1, ws.max_column):
-        c.drawString(x_offset, y_offset, str(col[0].value))
-        x_offset += 100  # 调整列间距
-    y_offset -= line_height
-    x_offset = 50
-
-    # 写入数据
-    c.setFont("Helvetica", 10)
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-        for cell in row:
-            c.drawString(x_offset, y_offset, str(cell.value))
-            x_offset += 100
-        y_offset -= line_height
-        x_offset = 50
-        if y_offset < 50:  # 如果接近页面底部，添加新页面
-            c.showPage()
-            y_offset = height - 50
-
-    # 保存 PDF
-    c.save()
 
 def main():
     """主函数"""

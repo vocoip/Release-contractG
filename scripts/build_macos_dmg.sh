@@ -55,6 +55,34 @@ rm -rf build dist .pyinstaller-cache || true
   --add-data "src/assets:src/assets" \
   src/launcher.py
 
+# 精简未使用的 Qt 组件：PyQt5 hook 会打包整个 Qt5 lib，需手动裁剪。
+# 本应用仅依赖 QtCore / QtGui / QtWidgets（已用 otool 验证三者互不依赖以下框架）。
+QT_LIB_DIR="dist/contractG.app/Contents/Frameworks/PyQt5/Qt5/lib"
+if [ -d "$QT_LIB_DIR" ]; then
+  for fw in \
+    QtNetwork QtDBus QtPrintSupport \
+    QtQml QtQmlModels QtQmlWorkerScript QtQuick QtQuickControls2 QtQuickWidgets \
+    QtSvg QtWebSockets QtWebChannel \
+    QtWebEngine QtWebEngineCore QtWebEngineWidgets \
+    QtMultimedia QtMultimediaWidgets QtSql QtTest QtDesigner QtDesignerComponents QtHelp \
+    QtBluetooth QtNfc QtPositioning QtLocation QtSensors QtSerialPort \
+    QtXml QtXmlPatterns QtOpenGL \
+    Qt3DCore Qt3DRender Qt3DInput Qt3DLogic Qt3DAnimation Qt3DExtras \
+    QtCharts QtDataVisualization QtRemoteObjects QtTextToSpeech; do
+    rm -rf "$QT_LIB_DIR/$fw.framework"
+  done
+  # 框架删除后，Contents/{Frameworks,Resources} 下指向它们的顶层转发符号链接会成为
+  # 悬空链接，导致 codesign --deep 校验失败（No such file or directory），需一并清除。
+  find "dist/contractG.app" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  echo "已裁剪未使用的 Qt 框架"
+fi
+
+# 移除 SVG 相关插件（应用图标均为 PNG，且已移除 QtSvg 框架）
+QT_PLUGIN_DIR="dist/contractG.app/Contents/Resources/PyQt5/Qt5/plugins"
+if [ -d "$QT_PLUGIN_DIR" ]; then
+  rm -f "$QT_PLUGIN_DIR"/iconengines/libqsvgicon* "$QT_PLUGIN_DIR"/imageformats/libqsvg* 2>/dev/null || true
+fi
+
 if [ -z "$SIGN_IDENTITY" ]; then
   SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F '\"' '/Developer ID Application:/{print $2; exit}')"
 fi

@@ -57,7 +57,7 @@ def setup_encoding():
 setup_python_path()
 
 # 导入UI相关模块
-from PyQt5.QtWidgets import QApplication, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QHBoxLayout, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QIcon
 
@@ -178,6 +178,46 @@ def ensure_directories():
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
 
+def install_exception_hook():
+    """安装全局异常钩子
+
+    PyQt5 在槽函数抛出未捕获异常时会调用 qFatal() 直接终止进程（表现为应用闪退），
+    安装自定义 excepthook 后改为记录日志并提示用户，避免整个应用被 abort。
+    """
+    def _hook(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+
+        detail = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+
+        try:
+            if sys.stderr is not None:
+                sys.stderr.write(detail)
+        except Exception:
+            pass
+
+        try:
+            from src.utils.runtime_paths import ensure_writable_layout
+            log_file = ensure_writable_layout() / "logs" / "error.log"
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n===== {datetime.now():%Y-%m-%d %H:%M:%S} =====\n{detail}")
+        except Exception:
+            pass
+
+        try:
+            if QApplication.instance() is not None:
+                QMessageBox.critical(
+                    None,
+                    "程序错误",
+                    f"操作过程中发生错误，已跳过本次操作：\n\n{exc_type.__name__}: {exc_value}\n\n"
+                    "详细信息已记录到日志文件。"
+                )
+        except Exception:
+            pass
+
+    sys.excepthook = _hook
+
 def main():
     """主函数"""
     try:
@@ -196,6 +236,9 @@ def main():
         
         # 创建QApplication实例
         app = QApplication(sys.argv)
+
+        # 安装全局异常钩子，避免槽函数异常导致进程被 abort
+        install_exception_hook()
 
         screen = app.primaryScreen()
         width = screen.availableGeometry().width() if screen else 0

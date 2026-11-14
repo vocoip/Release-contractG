@@ -1286,14 +1286,12 @@ class MainWindow(QMainWindow):
     
     def open_data_directory(self):
         """打开数据文件夹"""
-        data_dir = os.path.abspath("data")
-        if not os.path.exists(data_dir):
-            os.makedirs(data_dir)
+        data_dir = str(ensure_writable_layout() / "data")
         self.open_directory(data_dir)
     
     def open_output_directory(self):
         """打开输出文件夹"""
-        output_dir = self.contract_tab.excel_handler.get_contracts_folder()
+        output_dir = self.contract_tab.document_service.get_output_folder()
         self.open_directory(output_dir)
     
     def open_directory(self, directory):

@@ -55,32 +55,55 @@ rm -rf build dist .pyinstaller-cache || true
   --add-data "src/assets:src/assets" \
   src/launcher.py
 
-# 精简未使用的 Qt 组件：PyQt5 hook 会打包整个 Qt5 lib，需手动裁剪。
-# 本应用仅依赖 QtCore / QtGui / QtWidgets（已用 otool 验证三者互不依赖以下框架）。
-QT_LIB_DIR="dist/contractG.app/Contents/Frameworks/PyQt5/Qt5/lib"
+# 精简未使用的 Qt 框架：PyQt5 的 hook 会打包整个 Qt5 lib 及全部插件，其中多数本应用并不需要。
+# 原则：只删除可证明未被引用的内容，绝不按固定清单硬删——例如 cocoa 平台插件 libqcocoa.dylib
+# 依赖 QtDBus/QtPrintSupport，误删会导致启动时 QGuiApplicationPrivate::createPlatformIntegration 崩溃。
+APP_BUNDLE="dist/contractG.app"
+QT_LIB_DIR="$APP_BUNDLE/Contents/Frameworks/PyQt5/Qt5/lib"
+QT_PLUGIN_DIR="$APP_BUNDLE/Contents/Resources/PyQt5/Qt5/plugins"
 if [ -d "$QT_LIB_DIR" ]; then
-  for fw in \
-    QtNetwork QtDBus QtPrintSupport \
-    QtQml QtQmlModels QtQmlWorkerScript QtQuick QtQuickControls2 QtQuickWidgets \
-    QtSvg QtWebSockets QtWebChannel \
-    QtWebEngine QtWebEngineCore QtWebEngineWidgets \
-    QtMultimedia QtMultimediaWidgets QtSql QtTest QtDesigner QtDesignerComponents QtHelp \
-    QtBluetooth QtNfc QtPositioning QtLocation QtSensors QtSerialPort \
-    QtXml QtXmlPatterns QtOpenGL \
-    Qt3DCore Qt3DRender Qt3DInput Qt3DLogic Qt3DAnimation Qt3DExtras \
-    QtCharts QtDataVisualization QtRemoteObjects QtTextToSpeech; do
-    rm -rf "$QT_LIB_DIR/$fw.framework"
-  done
-  # 框架删除后，Contents/{Frameworks,Resources} 下指向它们的顶层转发符号链接会成为
-  # 悬空链接，导致 codesign --deep 校验失败（No such file or directory），需一并清除。
-  find "dist/contractG.app" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
-  echo "已裁剪未使用的 Qt 框架"
-fi
+  # 1) 删除应用不会使用的平台插件（webgl），它会连带引用 QtQuick/QtQml/QtNetwork 等重型框架
+  rm -f "$QT_PLUGIN_DIR"/platforms/libqwebgl.dylib 2>/dev/null || true
 
-# 移除 SVG 相关插件（应用图标均为 PNG，且已移除 QtSvg 框架）
-QT_PLUGIN_DIR="dist/contractG.app/Contents/Resources/PyQt5/Qt5/plugins"
-if [ -d "$QT_PLUGIN_DIR" ]; then
-  rm -f "$QT_PLUGIN_DIR"/iconengines/libqsvgicon* "$QT_PLUGIN_DIR"/imageformats/libqsvg* 2>/dev/null || true
+  # 2) 依赖分析：删除在 bundle 内（排除 Qt5/lib 自身）无任何二进制引用的框架
+  referenced="$(
+    find "$APP_BUNDLE/Contents" -path "$QT_LIB_DIR" -prune -o -type f \
+      \( -name '*.so' -o -name '*.dylib' -o -perm -111 \) -print0 2>/dev/null \
+      | xargs -0 otool -L 2>/dev/null | awk '/^\t/{print $1}' | sort -u || true
+  )"
+  for meta in "$QT_LIB_DIR"/*.framework; do
+    [ -d "$meta" ] || continue
+    name="$(basename "$meta" .framework)"
+    if printf '%s\n' "$referenced" | grep -qxE "(@rpath/|.*/)$name"; then
+      echo "保留 Qt 框架: $name"
+    else
+      rm -rf "$meta"
+      echo "裁剪 Qt 框架: $name"
+    fi
+  done
+
+  # 3) 清理因删除框架而悬空的转发符号链接（否则 codesign --deep 会报 No such file or directory）
+  find "$APP_BUNDLE" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+
+  # 4) 校验：确保剩余二进制引用的 Qt 框架均存在，否则中止构建，避免产出启动即崩溃的包
+  post_refs="$(
+    find "$APP_BUNDLE/Contents" -type f \( -name '*.so' -o -name '*.dylib' -o -perm -111 \) -print0 2>/dev/null \
+      | xargs -0 otool -L 2>/dev/null | awk '/^\t/{print $1}' | sort -u || true
+  )"
+  missing=""
+  for dep in ${(f)post_refs}; do
+    case "$dep" in
+      @rpath/*) n="${dep#@rpath/}" ;;
+      *) continue ;;
+    esac
+    printf '%s' "$n" | grep -qE '^Qt[A-Za-z]+$' || continue
+    [ -e "$QT_LIB_DIR/$n.framework" ] || missing="$missing $n"
+  done
+  if [ -n "$missing" ]; then
+    echo "构建校验失败：以下被引用的 Qt 框架已缺失 ->$missing" >&2
+    exit 1
+  fi
+  echo "Qt 框架精简完成"
 fi
 
 if [ -z "$SIGN_IDENTITY" ]; then
@@ -149,12 +172,41 @@ rm -rf "dist/dmg_stage"
 mkdir -p "dist/dmg_stage"
 ditto "dist/contractG.app" "dist/dmg_stage/contractG.app"
 ln -s "/Applications" "dist/dmg_stage/Applications"
-hdiutil create \
+
+if hdiutil create \
   -volname "contractG" \
   -srcfolder "dist/dmg_stage" \
   -ov \
   -format UDZO \
-  "dist/contractG.dmg"
+  "dist/contractG.dmg" 2>/dev/null; then
+  echo "DMG 生成完成（hdiutil create）"
+else
+  # 回退：受限环境（如沙箱）禁止对裸设备 /dev/rdisk* 写入，hdiutil create 不可用。
+  # makehybrid 纯用户态构建 HFS+，无需设备访问；但它会把 HFS+ 目录记录中的 FinderInfo
+  # 物化为 com.apple.FinderInfo xattr，挂载后导致 codesign --strict 报
+  # "resource fork, Finder information, or similar detritus not allowed"。
+  # 因此需以读写方式挂载到可写的挂载点（不能用只读的 /Volumes），清除该 xattr 后再压缩。
+  echo "hdiutil create 不可用，改用 makehybrid 回退方案"
+  rm -f "dist/contractG_raw.dmg"
+  rm -rf "dist/cg_mnt"
+  mkdir -p "dist/cg_mnt"
+  hdiutil makehybrid -hfs -hfs-volume-name "contractG" -o "dist/contractG_raw.dmg" "dist/dmg_stage"
+  hdiutil attach "dist/contractG_raw.dmg" -mountpoint "dist/cg_mnt" -nobrowse >/dev/null
+  xattr -cr "dist/cg_mnt/contractG.app"
+  for i in 1 2 3; do
+    hdiutil detach "dist/cg_mnt" >/dev/null 2>&1 && break
+    sleep 2
+  done
+  if mount | grep -q "dist/cg_mnt"; then
+    hdiutil detach "dist/cg_mnt" -force >/dev/null 2>&1 || true
+  fi
+  hdiutil convert "dist/contractG_raw.dmg" -format UDZO -o "dist/contractG.dmg"
+  rm -f "dist/contractG_raw.dmg"
+  rm -rf "dist/cg_mnt"
+  echo "DMG 生成完成（makehybrid 回退）"
+fi
+
+hdiutil verify "dist/contractG.dmg"
 
 if [ -n "$NOTARIZE_MODE" ]; then
   if [ "$NOTARIZE_MODE" = "profile" ]; then

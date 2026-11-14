@@ -24,7 +24,7 @@ from src.models.customer import Customer
 from src.database.excel_manager import ExcelManager
 from src.ui.dialogs.customer_dialog import CustomerDialog
 from src.utils.text_parser import TextParser
-from pypinyin import lazy_pinyin, Style
+from src.utils.text_search import build_pinyin_keys
 
 class CustomerTableItem(QTableWidgetItem):
     """自定义表格项，支持排序"""
@@ -417,13 +417,9 @@ class CustomerTab(QWidget):
             
             for customer in self.customers:
                 # 获取拼音和首字母
-                name_pinyin = ''.join(lazy_pinyin(customer.name or ''))  # 完整拼音
-                name_initials = ''.join([p[0] for p in lazy_pinyin(customer.name or '')])  # 拼音首字母
-                name_pinyin_initials = ''.join(lazy_pinyin(customer.name or '', style=Style.FIRST_LETTER))  # 专门的首字母模式
+                name_pinyin, name_initials, name_pinyin_initials = build_pinyin_keys(customer.name)
                 
-                contact_pinyin = ''.join(lazy_pinyin(customer.contact or ''))
-                contact_initials = ''.join([p[0] for p in lazy_pinyin(customer.contact or '')])
-                contact_pinyin_initials = ''.join(lazy_pinyin(customer.contact or '', style=Style.FIRST_LETTER))
+                contact_pinyin, contact_initials, contact_pinyin_initials = build_pinyin_keys(customer.contact)
                 
                 # 检查所有搜索字段
                 searchable_fields = [

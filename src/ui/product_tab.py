@@ -29,7 +29,7 @@ from src.ui.styles import (
     WARNING_COLOR, DANGER_COLOR, LIGHT_COLOR,
     HEADING_STYLE, SUBHEADING_STYLE, CARD_STYLE
 )
-from pypinyin import lazy_pinyin
+from src.utils.text_search import build_pinyin_keys
 
 class ProductDialog(QDialog):
     """商品信息对话框"""
@@ -380,10 +380,8 @@ class ProductTab(QWidget):
         self.filtered_products = []
         for product in self.products:
             # 获取商品信息的拼音和首字母
-            name_pinyin = ''.join(lazy_pinyin(product.name))
-            name_initials = ''.join([p[0] for p in lazy_pinyin(product.name)])
-            model_pinyin = ''.join(lazy_pinyin(product.model))
-            model_initials = ''.join([p[0] for p in lazy_pinyin(product.model)])
+            name_pinyin, name_initials, _ = build_pinyin_keys(product.name)
+            model_pinyin, model_initials, _ = build_pinyin_keys(product.model)
             
             # 将所有可搜索字段组合成一个字符串
             searchable_text = f"{product.name} {product.model} {product.unit} {name_pinyin} {name_initials} {model_pinyin} {model_initials}".lower()

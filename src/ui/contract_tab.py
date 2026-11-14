@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate, QSettings, QUrl, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QDesktopServices
-from pypinyin import lazy_pinyin
+from src.utils.text_search import build_pinyin_keys
 
 # 注意：路径设置已由path_setup模块处理，不需要在这里重复设置
 
@@ -738,10 +738,8 @@ class ContractTab(QWidget):
         row = 0
         for customer in customers:
             # 获取客户信息的拼音和首字母
-            name_pinyin = ''.join(lazy_pinyin(customer.name or ''))
-            name_initials = ''.join([p[0] for p in lazy_pinyin(customer.name or '')])
-            contact_pinyin = ''.join(lazy_pinyin(customer.contact or ''))
-            contact_initials = ''.join([p[0] for p in lazy_pinyin(customer.contact or '')])
+            name_pinyin, name_initials, _ = build_pinyin_keys(customer.name)
+            contact_pinyin, contact_initials, _ = build_pinyin_keys(customer.contact)
             
             # 将所有可搜索字段组合成一个字符串（包含原文、拼音和首字母）
             searchable_text = f"{customer.name or ''} {customer.contact or ''} {customer.phone or ''} {customer.address or ''} {name_pinyin} {name_initials} {contact_pinyin} {contact_initials}".lower()
@@ -813,10 +811,8 @@ class ContractTab(QWidget):
         row = 0
         for product in products:
             # 获取商品信息的拼音和首字母
-            name_pinyin = ''.join(lazy_pinyin(product.name))
-            name_initials = ''.join([p[0] for p in lazy_pinyin(product.name)])
-            model_pinyin = ''.join(lazy_pinyin(product.model))
-            model_initials = ''.join([p[0] for p in lazy_pinyin(product.model)])
+            name_pinyin, name_initials, _ = build_pinyin_keys(product.name)
+            model_pinyin, model_initials, _ = build_pinyin_keys(product.model)
             
             # 将所有可搜索字段组合成一个字符串（包含原文、拼音和首字母）
             searchable_text = f"{product.name} {product.model} {product.unit} {name_pinyin} {name_initials} {model_pinyin} {model_initials}".lower()

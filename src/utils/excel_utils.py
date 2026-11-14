@@ -113,6 +113,7 @@ class ExcelUtils:
         Returns:
             tuple: (导入的数据列表, 错误信息列表)
         """
+        wb = None
         try:
             # 读取Excel文件
             wb = load_workbook(file_path, read_only=True)
@@ -154,8 +155,10 @@ class ExcelUtils:
             # 创建列名到索引的映射
             header_map = {header: idx for idx, header in enumerate(internal_headers)}
             
-            # 获取总行数（不包括表头）
-            total_rows = sum(1 for _ in ws.iter_rows(min_row=2)) - 1
+            # 获取总行数（不包括表头）；仅在需要上报进度时计算，避免对工作表二次全量扫描
+            total_rows = 0
+            if progress_callback:
+                total_rows = max((ws.max_row or 0) - 1, 0)
             
             # 导入数据
             imported_data = []
@@ -193,6 +196,9 @@ class ExcelUtils:
             
         except Exception as e:
             raise Exception(f"导入数据失败：{str(e)}")
+        finally:
+            if wb is not None:
+                wb.close()
     
     @staticmethod
     def export_data(

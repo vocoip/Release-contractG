@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt5.QtGui import QIcon, QPixmap, QDesktopServices
 from src.services.document_service import DocumentService
-from src.utils.runtime_paths import get_resource_base_dir
+from src.utils.runtime_paths import get_resource_base_dir, ensure_writable_layout
 from src.ui.styles import CARD_STYLE
 
 def _icon_path(filename: str) -> str:

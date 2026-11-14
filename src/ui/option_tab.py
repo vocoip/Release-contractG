@@ -301,7 +301,7 @@ class OptionTab(QWidget):
             # 准备输出路径
             filename = os.path.basename(file_path)
             base_name = os.path.splitext(filename)[0]
-            output_dir = "output"  # 直接使用output目录，不再使用子目录
+            output_dir = str(ensure_writable_layout() / "output")
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, f"{base_name}.pdf")
             

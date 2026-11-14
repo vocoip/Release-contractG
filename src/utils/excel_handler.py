@@ -94,6 +94,18 @@ for font_path in font_candidates:
     except Exception:
         continue
 
+class _BlankCustomer:
+    """客户信息缺失时的空占位对象，所有字段为空字符串"""
+
+    name = ""
+    contact = ""
+    phone = ""
+    address = ""
+    bank_name = ""
+    bank_account = ""
+    tax_id = ""
+
+
 class ExcelHandler:
     """Excel处理工具类"""
     def __init__(self):
@@ -981,7 +993,17 @@ class ExcelHandler:
                 os.path.abspath(excel_file),
             ]
 
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                result = subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=120,
+                )
+            except subprocess.TimeoutExpired:
+                self.log("LibreOffice 转换超时（超过 120 秒），已中止")
+                raise Exception("LibreOffice 转换超时，请检查 Excel 文件或稍后重试")
 
             if progress_callback:
                 progress_callback(90)
@@ -1135,6 +1157,14 @@ class ExcelHandler:
         except Exception as e:
             self.log(f"向PDF添加印章时出错: {str(e)}")
             raise
+        finally:
+            # 确保所有文档句柄被释放（PYMuPDF 的 close 幂等）
+            for doc in (output_document, pdf_document, img):
+                if doc is not None:
+                    try:
+                        doc.close()
+                    except Exception:
+                        pass
     
     def convert_pdf_to_image_pdf(self, pdf_file, output_pdf=None, dpi=150, quality=60):
         """
@@ -1427,6 +1457,10 @@ class ExcelHandler:
                 return self._generate_excel_from_template(template_path, contract, "contract")
             except Exception as e:
                 self.log(f"使用合同模板生成失败，将回退到内置默认模板: {str(e)}")
+
+        # 客户信息缺失时兜底，避免内置模板生成时访问 None 属性崩溃
+        if getattr(contract, "customer", None) is None:
+            contract.customer = _BlankCustomer()
 
         # 创建工作簿
         wb = Workbook()
@@ -1826,6 +1860,10 @@ class ExcelHandler:
                 return self._generate_excel_from_template(template_path, contract, "quote")
             except Exception as e:
                 self.log(f"使用报价模板生成失败，将回退到内置默认模板: {str(e)}")
+
+        # 客户信息缺失时兜底，避免内置模板生成时访问 None 属性崩溃
+        if getattr(contract, "customer", None) is None:
+            contract.customer = _BlankCustomer()
 
         # 创建工作簿
         wb = Workbook()

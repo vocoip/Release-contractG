@@ -1224,13 +1224,20 @@ class ContractTab(QWidget):
         # 获取商品列表
         items = []
         for row in range(self.contract_items_table.rowCount()):
+            try:
+                price = float(self.contract_items_table.item(row, 3).text())
+                quantity = int(self.contract_items_table.item(row, 4).text())
+                amount = float(self.contract_items_table.item(row, 5).text())
+            except (ValueError, TypeError, AttributeError):
+                QMessageBox.warning(self, "警告", f"第 {row + 1} 行的单价/数量/金额不是有效数值，请检查后重试。")
+                return
             item = ContractItem(
                 name=self.contract_items_table.item(row, 0).text(),
                 model=self.contract_items_table.item(row, 1).text(),
                 unit=self.contract_items_table.item(row, 2).text(),
-                price=float(self.contract_items_table.item(row, 3).text()),
-                quantity=int(self.contract_items_table.item(row, 4).text()),
-                amount=float(self.contract_items_table.item(row, 5).text())
+                price=price,
+                quantity=quantity,
+                amount=amount
             )
             items.append(item)
         

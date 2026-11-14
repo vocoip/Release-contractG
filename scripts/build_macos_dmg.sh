@@ -46,11 +46,46 @@ export PYINSTALLER_CONFIG_DIR="$PWD/.pyinstaller-cache"
 
 rm -rf build dist .pyinstaller-cache || true
 
+# 生成 app bundle 图标：以运行时使用的 resources/icon.ico 作为唯一图标源，
+# 转换出 .icns 交给 PyInstaller，确保启动前（Finder/Dock）与启动后图标一致。
+ICON_SRC="resources/icon.ico"
+ICON_ICNS="resources/icon.icns"
+ICON_ARG=""
+if [ -f "$ICON_SRC" ] && command -v iconutil >/dev/null 2>&1; then
+  echo "由 $ICON_SRC 生成 $ICON_ICNS"
+  TMP_ICONS=$(mktemp -d)
+  "$VENV_PY" - "$ICON_SRC" "$TMP_ICONS" <<'PY'
+import sys
+from PIL import Image
+
+src, out = sys.argv[1], sys.argv[2]
+image = Image.open(src).convert("RGBA")
+for size in (16, 32, 64, 128, 256, 512, 1024):
+    image.resize((size, size), Image.LANCZOS).save(f"{out}/{size}.png")
+PY
+  ICONSET="$TMP_ICONS/icon.iconset"
+  mkdir -p "$ICONSET"
+  cp "$TMP_ICONS/16.png"   "$ICONSET/icon_16x16.png"
+  cp "$TMP_ICONS/32.png"   "$ICONSET/icon_16x16@2x.png"
+  cp "$TMP_ICONS/32.png"   "$ICONSET/icon_32x32.png"
+  cp "$TMP_ICONS/64.png"   "$ICONSET/icon_32x32@2x.png"
+  cp "$TMP_ICONS/128.png"  "$ICONSET/icon_128x128.png"
+  cp "$TMP_ICONS/256.png"  "$ICONSET/icon_128x128@2x.png"
+  cp "$TMP_ICONS/256.png"  "$ICONSET/icon_256x256.png"
+  cp "$TMP_ICONS/512.png"  "$ICONSET/icon_256x256@2x.png"
+  cp "$TMP_ICONS/512.png"  "$ICONSET/icon_512x512.png"
+  cp "$TMP_ICONS/1024.png" "$ICONSET/icon_512x512@2x.png"
+  iconutil -c icns "$ICONSET" -o "$ICON_ICNS"
+  rm -rf "$TMP_ICONS"
+  ICON_ARG="--icon $ICON_ICNS"
+fi
+
 "$VENV_PY" -m PyInstaller \
   --noconfirm \
   --clean \
   --windowed \
   --name contractG \
+  ${=ICON_ARG} \
   --add-data "resources:resources" \
   --add-data "src/assets:src/assets" \
   src/launcher.py

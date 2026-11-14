@@ -23,5 +23,8 @@ build/
 *.spec
 .pyinstaller-cache/
 
+# 构建时由 resources/icon.ico 生成的 app 图标
+resources/icon.icns
+
 _internal/
 contractG.exe

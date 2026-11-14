@@ -15,6 +15,9 @@ logs/
 *.log
 output/
 
+# 运行时生成的单价历史（用户数据）
+data/price_history.json
+
 dist/
 build/
 *.spec

@@ -152,6 +152,7 @@ class ContractTab(QWidget):
         self.customer_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.customer_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.customer_table.doubleClicked.connect(self.select_customer)
+        self.customer_table.itemSelectionChanged.connect(self.select_customer)
         
         # 调整列宽
         self.customer_table.setColumnWidth(0, 200)
@@ -723,6 +724,25 @@ class ContractTab(QWidget):
         if customer:
             self.selected_customer = customer
             self.selected_customer_label.setText(f"已选择: {customer.name} ({customer.contact})")
+            # 兼容“先加商品、后选客户”的顺序：按该客户刷新已有明细的单价
+            self.apply_recent_prices_to_items()
+
+    def apply_recent_prices_to_items(self):
+        """将已加入明细的商品价格刷新为该客户最近一次使用的单价"""
+        if not hasattr(self, 'selected_customer'):
+            return
+        customer_name = self.selected_customer.name
+        for row in range(self.contract_items_table.rowCount()):
+            name_item = self.contract_items_table.item(row, 0)
+            model_item = self.contract_items_table.item(row, 1)
+            price_item = self.contract_items_table.item(row, 3)
+            if not name_item or not model_item or not price_item:
+                continue
+            recent_price = self.excel_manager.get_recent_price(
+                customer_name, name_item.text(), model_item.text()
+            )
+            if recent_price and price_item.text() != recent_price:
+                price_item.setText(recent_price)
     
     def update_product_table(self):
         """更新商品表格"""
@@ -779,6 +799,12 @@ class ContractTab(QWidget):
         model = self.product_table.item(row, 1).text()
         unit = self.product_table.item(row, 2).text()
         price = self.product_table.item(row, 3).text()
+        
+        # 自动填充该客户该商品最近一次使用过的单价（无历史记录时沿用商品库单价）
+        customer_name = self.selected_customer.name if hasattr(self, 'selected_customer') else ""
+        recent_price = self.excel_manager.get_recent_price(customer_name, name, model)
+        if recent_price:
+            price = recent_price
         
         # 检查价格是否为空
         if not price:
@@ -1140,15 +1166,16 @@ class ContractTab(QWidget):
             if company.is_default:
                 self.company_combo.setCurrentIndex(self.company_combo.count() - 1)
     
-    def clear_contract(self):
+    def clear_contract(self, keep_customer=False):
         """清空合同所有内容"""
         # 清空合同商品列表
         self.clear_contract_items()
         
-        # 清空选中的客户
-        if hasattr(self, 'selected_customer'):
-            delattr(self, 'selected_customer')
-        self.selected_customer_label.setText("未选择客户")
+        # 清空选中的客户（keep_customer=True 时保留，供连续制单复用该客户的最近单价）
+        if not keep_customer:
+            if hasattr(self, 'selected_customer'):
+                delattr(self, 'selected_customer')
+            self.selected_customer_label.setText("未选择客户")
         
         # 重置日期为当前日期
         self.sign_date.setDate(QDate.currentDate())
@@ -1259,11 +1286,16 @@ class ContractTab(QWidget):
         try:
             self.document_service.generate_document(contract, doc_type_id)
             
+            # 记录本次使用的单价（按客户），作为下次的“最近单价”
+            self.excel_manager.record_prices([
+                (customer.name, item.name, item.model, item.price) for item in items
+            ])
+            
             # 更新合同编号（自增）
             self.increment_contract_number()
             
-            # 清空合同所有内容
-            self.clear_contract()
+            # 清空合同所有内容（保留已选客户，便于连续制单并复用其最近单价）
+            self.clear_contract(keep_customer=True)
             
             # 自动打开输出文件夹
             self.open_contracts_folder()

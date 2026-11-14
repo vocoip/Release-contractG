@@ -6,6 +6,8 @@ Excel数据管理模块 - 使用openpyxl替代pandas
 """
 
 import os
+import json
+import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from openpyxl import Workbook, load_workbook
@@ -37,6 +39,7 @@ class ExcelManager:
         self.data_dir.mkdir(exist_ok=True)
         self.customers_file = self.data_dir / "customers.xlsx"
         self.products_file = self.data_dir / "products.xlsx"
+        self.price_history_file = self.data_dir / "price_history.json"
         
         # 确保数据文件存在
         self._ensure_files_exist()
@@ -298,6 +301,56 @@ class ExcelManager:
             
         except Exception as e:
             raise Exception(f"保存商品数据失败：{str(e)}")
+    
+    @staticmethod
+    def _price_key(customer: str, name: str, model: str) -> str:
+        """生成客户单价历史的键（按 客户+名称+规格型号 标识）"""
+        return f"{(customer or '').strip()}||{(name or '').strip()}||{(model or '').strip()}"
+    
+    def _load_price_history(self) -> Dict[str, Any]:
+        """读取单价历史，异常时返回空字典"""
+        if not self.price_history_file.exists():
+            return {}
+        try:
+            with open(self.price_history_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (json.JSONDecodeError, OSError):
+            return {}
+    
+    def get_recent_price(self, customer: str, name: str, model: str) -> Optional[str]:
+        """获取某客户某商品最近一次使用的单价（无记录返回 None）"""
+        entry = self._load_price_history().get(self._price_key(customer, name, model))
+        if isinstance(entry, dict):
+            price = entry.get('price')
+            if price:
+                return price
+        return None
+    
+    def record_prices(self, entries: List[Tuple[str, str, str, Any]]):
+        """记录客户商品最近使用的单价
+
+        entries: 可迭代的 (客户, 名称, 规格型号, 单价) 序列
+        """
+        history = self._load_price_history()
+        changed = False
+        now = datetime.datetime.now().isoformat(timespec='seconds')
+        for customer, name, model, price in entries:
+            if not (customer or '').strip() or not (name or '').strip():
+                continue
+            key = self._price_key(customer, name, model)
+            try:
+                normalized = f"{float(str(price)):.2f}"
+            except (ValueError, TypeError):
+                continue
+            history[key] = {'price': normalized, 'updated_at': now}
+            changed = True
+        if changed:
+            try:
+                with open(self.price_history_file, 'w', encoding='utf-8') as f:
+                    json.dump(history, f, ensure_ascii=False, indent=2)
+            except OSError as e:
+                print(f"保存单价历史失败：{e}")
     
     def import_products(self, file_path: str, progress_callback=None) -> Tuple[List[Product], List[str]]:
         """导入商品数据"""

@@ -69,6 +69,7 @@ PYTHON_BIN=python3.12 scripts/build_macos_dmg.sh
 - ✅ 自定义合同编号、签订日期、交货时间（文本）
 - ✅ 灵活的付款方式设置
 - ✅ 支持合同/报价模板（可导入多套模板并按类型选择）
+- ✅ 按客户自动填充商品最近一次使用的单价（无记录时使用商品库单价）
 - ✅ 一键转换为PDF并添加公司印章
 - ✅ 支持图片式PDF转换，提高兼容性
 </details>
@@ -131,11 +132,15 @@ PYTHON_BIN=python3.12 scripts/build_macos_dmg.sh
 <summary><b>如何备份数据？</b></summary>
 <p>
 - 复制data目录下的customers.xlsx和products.xlsx文件<br>
+- 如需保留“按客户最近单价”记忆，同时复制data目录下的price_history.json文件<br>
 - 同时备份config目录下的配置文件
 </p>
 </details>
 
 ## 📝 版本历史
+
+### v1.1.1
+- 💾 合同/报价单按客户自动填充商品最近一次使用的单价（记录于 `data/price_history.json`）
 
 ### v1.1.0
 - 📄 新增模板管理：导出参考模板、导入模板、设默认、删除
@@ -207,7 +212,8 @@ quote_template_default = 标准版
 │   └── settings.ini       # 系统设置配置
 ├── data/                  # 数据文件目录
 │   ├── customers.xlsx     # 客户数据
-│   └── products.xlsx      # 商品数据
+│   ├── products.xlsx      # 商品数据
+│   └── price_history.json # 按客户记录的商品最近单价
 ├── logs/                  # 日志文件目录
 ├── output/                # 输出文件目录（生成的合同和报价单）
 ├── resources/             # 资源文件目录

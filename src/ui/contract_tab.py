@@ -13,9 +13,9 @@ from PyQt5.QtWidgets import (
     QLabel, QComboBox, QDateEdit, QSpinBox,
     QDoubleSpinBox, QMessageBox, QGroupBox,
     QFormLayout, QCheckBox, QSplitter, QSizePolicy, QFrame,
-    QDialog, QButtonGroup, QRadioButton, QGridLayout
+    QDialog, QButtonGroup, QRadioButton, QGridLayout, QProgressBar
 )
-from PyQt5.QtCore import Qt, QDate, QSettings, QUrl
+from PyQt5.QtCore import Qt, QDate, QSettings, QUrl, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QDesktopServices
 from pypinyin import lazy_pinyin
 
@@ -34,6 +34,33 @@ from src.ui.styles import (
 def _icon_path(filename: str) -> str:
     return os.path.join(str(get_resource_base_dir()), "resources", "icons", filename)
 
+class DocumentGenerationThread(QThread):
+    """在后台线程生成合同/报价单
+
+    文档生成包含 Excel 渲染与 LibreOffice 转换等耗时操作，放在 UI 主线程会冻结界面，
+    因此统一交由该线程执行，完成后通过信号回传结果。
+    """
+
+    generation_succeeded = pyqtSignal(object)
+    generation_failed = pyqtSignal(str)
+
+    def __init__(self, document_service, excel_manager, contract, doc_type_id, price_entries):
+        super().__init__()
+        self.document_service = document_service
+        self.excel_manager = excel_manager
+        self.contract = contract
+        self.doc_type_id = doc_type_id
+        self.price_entries = price_entries
+
+    def run(self):
+        try:
+            result = self.document_service.generate_document(self.contract, self.doc_type_id)
+            # 生成成功后才记录本次使用的单价，避免失败时污染历史
+            self.excel_manager.record_prices(self.price_entries)
+            self.generation_succeeded.emit(result)
+        except Exception as e:
+            self.generation_failed.emit(str(e))
+
 class ContractTab(QWidget):
     """合同生成标签页"""
     def __init__(self, customer_tab, product_tab):
@@ -46,6 +73,9 @@ class ContractTab(QWidget):
         
         # 创建QSettings对象，用于保存和恢复用户选择
         self.settings = QSettings("contractG", "ContractGenerator")
+        
+        # 后台生成线程引用（保持强引用，避免线程被回收）
+        self._generation_thread = None
         
         # 连接客户和商品更新信号
         self.customer_tab.customer_updated.connect(self.update_customer_combo)
@@ -432,6 +462,24 @@ class ContractTab(QWidget):
         
         # 将生成选项添加到合同布局的顶部
         contract_layout.addLayout(options_layout)
+        
+        # 生成进度条（生成时显示忙碌指示，避免界面看似卡死）
+        self.generate_progress = QProgressBar()
+        self.generate_progress.setFixedHeight(6)
+        self.generate_progress.setTextVisible(False)
+        self.generate_progress.setVisible(False)
+        self.generate_progress.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                border-radius: 3px;
+                background-color: #ECEFF1;
+            }
+            QProgressBar::chunk {
+                border-radius: 3px;
+                background-color: #4CAF50;
+            }
+        """)
+        contract_layout.addWidget(self.generate_progress)
         
         # 添加分隔线
         separator = QFrame()
@@ -1194,6 +1242,10 @@ class ContractTab(QWidget):
     
     def generate_contract(self):
         """生成合同"""
+        # 生成进行中时忽略重复触发
+        if self._generation_thread is not None and self._generation_thread.isRunning():
+            return
+        
         # 检查是否选择了客户
         if not hasattr(self, 'selected_customer'):
             QMessageBox.warning(self, "警告", "请先选择客户！")
@@ -1290,14 +1342,40 @@ class ContractTab(QWidget):
         # 保存当前选择的状态
         self.save_settings()
         
+        # 记录本次使用的单价（按客户），生成成功后由后台线程写入历史
+        price_entries = [
+            (customer.name, item.name, item.model, item.price) for item in items
+        ]
+        
+        # 交由后台线程生成，避免 LibreOffice 转换期间冻结界面
+        self._set_generating(True)
+        self._generation_thread = DocumentGenerationThread(
+            self.document_service,
+            self.excel_manager,
+            contract,
+            doc_type_id,
+            price_entries,
+        )
+        self._generation_thread.generation_succeeded.connect(self._on_generation_succeeded)
+        self._generation_thread.generation_failed.connect(self._on_generation_failed)
+        self._generation_thread.start()
+    
+    def _set_generating(self, generating: bool):
+        """切换生成中的 UI 状态（禁用按钮 + 显示进度条）"""
+        self.generate_btn.setEnabled(not generating)
+        if generating:
+            # 不确定进度（忙碌指示），任务完成后恢复
+            self.generate_progress.setRange(0, 0)
+            self.generate_progress.setVisible(True)
+        else:
+            self.generate_progress.setRange(0, 100)
+            self.generate_progress.setValue(0)
+            self.generate_progress.setVisible(False)
+    
+    def _on_generation_succeeded(self, _result):
+        """后台生成成功后的收尾处理"""
+        self._set_generating(False)
         try:
-            self.document_service.generate_document(contract, doc_type_id)
-            
-            # 记录本次使用的单价（按客户），作为下次的“最近单价”
-            self.excel_manager.record_prices([
-                (customer.name, item.name, item.model, item.price) for item in items
-            ])
-            
             # 更新合同编号（自增）
             self.increment_contract_number()
             
@@ -1306,9 +1384,13 @@ class ContractTab(QWidget):
             
             # 自动打开输出文件夹
             self.open_contracts_folder()
-            
         except Exception as e:
-            QMessageBox.warning(self, "警告", f"生成文档时出错：{str(e)}")
+            QMessageBox.warning(self, "警告", f"文档已生成，但后续处理出错：{str(e)}")
+    
+    def _on_generation_failed(self, error_msg):
+        """后台生成失败后的处理"""
+        self._set_generating(False)
+        QMessageBox.warning(self, "警告", f"生成文档时出错：{error_msg}")
     
     def open_contracts_folder(self):
         """打开合同文件夹"""

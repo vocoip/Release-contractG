@@ -174,7 +174,7 @@ class SplashScreen(QSplashScreen):
         font.setBold(False)
         painter.setFont(font)
         painter.setPen(QColor(255, 255, 255, 180))
-        painter.drawText(0, 230, self.width(), 30, Qt.AlignCenter, "Version 1.1.0")
+        painter.drawText(0, 230, self.width(), 30, Qt.AlignCenter, "Version 1.1.2")
         
         # 绘制底部版权信息
         font.setPointSize(9)

@@ -131,13 +131,20 @@ PYTHON_BIN=python3.12 scripts/build_macos_dmg.sh
 <details>
 <summary><b>如何备份数据？</b></summary>
 <p>
-- 复制data目录下的customers.xlsx和products.xlsx文件<br>
-- 如需保留“按客户最近单价”记忆，同时复制data目录下的price_history.json文件<br>
-- 同时备份config目录下的配置文件
+- 复制可写根目录下 <code>data/</code> 里的 customers.xlsx 和 products.xlsx 文件<br>
+- 如需保留“按客户最近单价”记忆，同时复制 <code>data/price_history.json</code><br>
+- 同时备份 <code>config/</code> 目录下的配置文件<br>
+- 可写根目录的位置见“配置说明 → 配置文件位置”
 </p>
 </details>
 
 ## 📝 版本历史
+
+### v1.1.2
+- ⚡ 合同/报价单生成改为后台线程执行，生成期间界面不再卡顿（按钮禁用 + 进度提示）
+- 🧪 新增单元测试（价格历史、模板回退与 None 客户兜底），并接入 GitHub Actions CI
+- 🧹 统一拼音搜索键实现（`src/utils/text_search.py`），修复 Excel 导入的工作簿句柄泄漏
+- 🛠 修复“Excel 转 PDF”偶发转换失败（`option_tab` 缺失导入）
 
 ### v1.1.1
 - 💾 合同/报价单按客户自动填充商品最近一次使用的单价（记录于 `data/price_history.json`）
@@ -207,6 +214,7 @@ quote_template_default = 标准版
 
 ```
 .
+├── .github/workflows/     # CI/CD（语法检查+单测；打 tag 构建 DMG 并发布 Release）
 ├── config/                # 配置文件目录
 │   ├── company.json       # 公司信息配置
 │   └── settings.ini       # 系统设置配置
@@ -214,17 +222,46 @@ quote_template_default = 标准版
 │   ├── customers.xlsx     # 客户数据
 │   ├── products.xlsx      # 商品数据
 │   └── price_history.json # 按客户记录的商品最近单价
-├── logs/                  # 日志文件目录
-├── output/                # 输出文件目录（生成的合同和报价单）
 ├── resources/             # 资源文件目录
-│   └── icon.ico           # 应用程序图标
+│   ├── icon.ico           # 应用图标（构建时据此生成 icon.icns）
+│   ├── icons/             # 界面图标
+│   └── seals/             # 公司印章
+├── scripts/               # 构建与发布脚本
+│   ├── build_macos_dmg.sh # 构建 .app / .dmg（含签名、公证）
+│   └── upload_github_release.sh
 ├── src/                   # 源代码目录
+│   ├── database/          # 数据层（excel_manager）
+│   ├── models/            # 数据模型
+│   ├── services/          # 业务服务（document_service）
+│   ├── ui/                # 界面（各 Tab 与主窗口）
+│   └── utils/             # 工具（excel_handler、runtime_paths、text_search 等）
 ├── templates/             # 模板文件目录
+├── tests/                 # 单元测试
 ├── README.md              # 说明文档
 ├── requirements.txt       # 依赖包列表
 ├── run.command            # macOS 一键启动脚本
 └── start_contractG.bat    # Windows 启动脚本
 ```
+
+> `logs/`、`output/` 等运行时目录不在仓库中，程序首次运行时会自动在可写根目录下创建。
+
+## 🧪 开发与测试
+
+### 运行单元测试
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+测试位于 `tests/`：`test_document_service.py`（文档服务）、`test_excel_manager.py`（价格历史）、`test_excel_handler.py`（模板回退与 None 客户兜底）。
+
+### 持续集成（GitHub Actions）
+
+见 `.github/workflows/ci.yml`：
+
+- 推送到 `main` 或提交 PR：在 `macos-14` 上以 Python 3.10 / 3.12 矩阵执行 `compileall` 与 `unittest`
+- 推送 `v*` 标签：构建 `dist/contractG.dmg` 并创建 GitHub Release（若配置了签名/公证密钥则自动完成签名与公证）
+
 
 ## 📄 许可证
 

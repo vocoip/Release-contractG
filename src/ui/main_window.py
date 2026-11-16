@@ -1305,7 +1305,7 @@ class MainWindow(QMainWindow):
             self,
             "关于",
             "<h3>contractG</h3>"
-            "<p>版本: 1.1.0</p>"
+            "<p>版本: 1.1.2</p>"
             "<p>一个简单易用的合同&报价单生成工具。</p>"
             "<p>© 2024 版权所有</p>"
         )
